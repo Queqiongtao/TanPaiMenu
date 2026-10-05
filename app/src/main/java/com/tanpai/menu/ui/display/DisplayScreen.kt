@@ -77,7 +77,7 @@ private val ColumnGap = 5.dp
 /** 价格列定宽，保证跨卡片左边界一致。 */
 private val PriceColumnWidth = 100.dp
 /** 状态列定宽（有货 / 余 N / 已售完徽标共用）。 */
-private val StatusColumnWidth = 60.dp
+private val StatusColumnWidth = 68.dp
 
 @Composable
 fun DisplayScreen(
@@ -277,12 +277,10 @@ fun DishCard(dish: Dish, showStockHint: Boolean = true, modifier: Modifier = Mod
                     SoldOutBadge()
                 } else if (showStockHint) {
                     val status = stockStatus(dish)
-                    Text(
+                    StatusBadge(
                         text = status.text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = ChineseFontFamily,
-                        color = status.color,
-                        maxLines = 1
+                        containerColor = status.containerColor,
+                        contentColor = status.contentColor
                     )
                 }
             }
@@ -294,16 +292,22 @@ fun DishCard(dish: Dish, showStockHint: Boolean = true, modifier: Modifier = Mod
 private fun stockStatus(dish: Dish): StockStatus = when {
     dish.stockEnabled -> StockStatus(
         text = stringResource(R.string.display_stock_remaining, dish.stockCount),
-        color = MaterialTheme.colorScheme.onSurfaceVariant
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
 
     else -> StockStatus(
         text = stringResource(R.string.display_in_stock),
-        color = MaterialTheme.colorScheme.tertiary
+        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
     )
 }
 
-private data class StockStatus(val text: String, val color: Color)
+private data class StockStatus(
+    val text: String,
+    val containerColor: Color,
+    val contentColor: Color
+)
 
 @Composable
 private fun DishThumbnail(dish: Dish) {
@@ -336,23 +340,42 @@ private fun DishThumbnail(dish: Dish) {
     }
 }
 
-/** 售完徽标：置于卡片行尾，不覆盖菜名与价格。 */
+/**
+ * 状态徽标：有货 / 余 N / 已售完共用，保证三态形状、内边距与字号完全一致，
+ * 仅容器色与文字色不同。
+ */
 @Composable
-private fun SoldOutBadge(modifier: Modifier = Modifier) {
+private fun StatusBadge(
+    text: String,
+    containerColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier
+) {
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.error,
+        color = containerColor,
         shape = RoundedCornerShape(8.dp)
     ) {
         Text(
-            text = stringResource(R.string.display_sold_out),
+            text = text,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = MaterialTheme.typography.bodyMedium,
             fontFamily = ChineseFontFamily,
-            color = MaterialTheme.colorScheme.onError,
+            color = contentColor,
             maxLines = 1
         )
     }
+}
+
+/** 售完徽标：红底白字，独立于「显示是否有货」开关，始终显示。 */
+@Composable
+private fun SoldOutBadge(modifier: Modifier = Modifier) {
+    StatusBadge(
+        text = stringResource(R.string.display_sold_out),
+        containerColor = MaterialTheme.colorScheme.error,
+        contentColor = MaterialTheme.colorScheme.onError,
+        modifier = modifier
+    )
 }
 
 @Composable
