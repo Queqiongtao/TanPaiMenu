@@ -85,13 +85,33 @@ foreach ($l in ($dataDf -split "`n")) {
 }
 
 $adbVersion = ((Invoke-Native -Exe $adb -Arguments @('version') -Quiet).Output -split "`r?`n" | Select-Object -First 2) -join ' / '
-$now = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+$now         = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+$densityFlat = ($wmDensity -replace "`r?`n", ' / ')
+$sizeFlat    = if ($wmSize -match '(\d+x\d+)') { $Matches[1] } else { $wmSize }
+if ($wmSize -match 'Override size:\s*(\d+x\d+)') { $sizeFlat = "$sizeFlat（覆盖 $($Matches[1])）" }
+$fence       = '```'   # 用单引号常量：双引号 here-string 会把 3 个反引号转义成 1 个
+
+$abiNote = if ($abi -eq 'arm64-v8a') {
+    '主 ABI 为 arm64-v8a：只需 arm64-v8a 单 ABI 包'
+} else {
+    "主 ABI 为 $abi：只需包含 $abi 的包"
+}
+$memNote = if ($memTotalMb -lt 2048) {
+    "$memTotalMb MB 偏小，需收紧 Coil 缓存与首屏卡片数"
+} else {
+    "$memTotalMb MB 充足，可沿用默认 Coil 缓存策略"
+}
+$densityNote = if ($wmDensity -match 'Override density:\s*(\d+)') {
+    "存在密度覆盖（$densityFlat）：UI 按覆盖密度 $($Matches[1]) 设计"
+} else {
+    "字号与卡片尺寸按 $densityFlat 设计"
+}
 
 $md = @"
 # 设备能力基线（Phase 0 产出）
 
 > 采集时间：$now
-> 采集命令：``scripts\device-precheck.bat``
+> 采集命令：`scripts\device-precheck.bat`
 > 设备序列号：$serial
 > adb：$adbVersion
 
@@ -102,27 +122,27 @@ $md = @"
 | 主 ABI | $abi |
 | ABI 列表 | $abiList |
 | 内存总量 | $memTotalMb MB |
-| 屏幕 | $wmSize |
-| 密度 | $wmDensity |
+| 屏幕 | $sizeFlat |
+| 密度 | $densityFlat |
 | /data 可用 | $freeMb MB |
 | Build 指纹 | $fingerprint |
 
 ## 原始输出
 
-```
+$fence
 cat /proc/meminfo        -> $memLine
 wm size                  -> $wmSize
-wm density               -> $wmDensity
+wm density               -> $densityFlat
 df -h /data              -> $dataDf
-```
+$fence
 
 ## 对打包与 UI 的影响
 
-- ABI：主 ABI 为 $abi —— 若为 64 位则单打 arm64-v8a，否则只打 $abi。
-- 内存：$memTotalMb MB —— 小于 2048 MB 时收紧 Coil 缓存与首屏卡片数。
-- 分辨率与密度：$wmSize / $wmDensity —— 决定展示页字号与卡片尺寸。
+- ABI：$abiNote。
+- 内存：$memNote。
+- 分辨率与密度：$sizeFlat，$densityNote；横屏下展示页字号与卡片尺寸以此为准。
+- 存储：/data 可用 $freeMb MB，容纳 APK 与菜品图片素材无压力。
 "@
-
 $outDir = Split-Path -Parent $OutputPath
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 [System.IO.File]::WriteAllText($OutputPath, $md, (New-Object System.Text.UTF8Encoding($false)))

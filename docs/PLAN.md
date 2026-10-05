@@ -1,6 +1,6 @@
-# TanPaiMenu 摆摊电子菜单 —— 开发计划
+﻿# TanPaiMenu 摆摊电子菜单 —— 开发计划
 
-> 版本：v1.0 ｜ 状态：待实施 ｜ 更新日期：2026-10-04
+> 版本：v1.1 ｜ 状态：Phase 0 已完成，待进入 Phase 1 ｜ 更新日期：2026-10-05
 
 ## 1. 项目概述
 
@@ -26,7 +26,7 @@ TanPaiMenu 是一款面向移动摊位的安卓电子菜单应用。摊位上用
 - 不做点单、下单、支付、收银、叫号、小票打印。
 - 不做多摊位 / 多主机互备，不做云端账号，不做跨互联网的远程访问。
 - 不做会员、营销、报表分析等经营系统功能。
-- 本期只产出文档，不产出工程骨架代码、CI 与签名发布流程。
+- 规划阶段不产出业务代码；Phase 0 只交付最小 Hello World 工程骨架与运维脚本，不含 CI 与签名发布流程。
 
 ### 2.3 后续可扩展（不在本期承诺）
 
@@ -39,12 +39,13 @@ TanPaiMenu 是一款面向移动摊位的安卓电子菜单应用。摊位上用
 
 | 项 | 现状 |
 | --- | --- |
-| 项目目录 `D:\Project\TanPaiMenu` | 全新空目录，非 git 仓库 |
-| JDK / Android SDK / Android Studio | 均未安装 |
-| gradle / adb / flutter | 均不在 PATH |
-| 已具备 | `winget`、Git、Node v24、.NET 10、Python 3.10 |
-| 外网 | 访问 `dl.google.com` 失败，需镜像或联网授权 |
-| 目标平板 | Android 7（API 24），已确认可走 USB 调试 |
+| 项目目录 `D:\Project\TanPaiMenu` | 已是 git 仓库（`main`），含最小 Compose 工程骨架与运维脚本 |
+| JDK | Temurin 17.0.20.1，`C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot` |
+| Android SDK | `D:\Android\Sdk`：platform-tools 37.0.1、platforms 34/35、build-tools 35.0.0、cmdline-tools |
+| Gradle | 8.9，`D:\Android\gradle-8.9`，工程已带 wrapper |
+| 环境变量 | 用户级 `JAVA_HOME` / `ANDROID_HOME` / `ANDROID_SDK_ROOT` 已写入；PATH 已含 jdk、platform-tools、cmdline-tools、gradle |
+| 网络 | 直连 `dl.google.com` 不稳定；安装期走本地代理 `127.0.0.1:7890` + 阿里云 / 腾讯镜像 |
+| 目标平板 | Teclast T10(E3C6)，Android 7.0（API 24），arm64-v8a，3955MB，1600x2560，密度 320→426 |
 
 ### 3.2 版本基线
 
@@ -52,37 +53,32 @@ TanPaiMenu 是一款面向移动摊位的安卓电子菜单应用。摊位上用
 | --- | --- | --- |
 | `minSdk` | 24 | 平板是 Android 7；同时是 Compose 覆盖老设备的下限 |
 | `targetSdk` | 34 | 减少新策略摩擦；运行期行为按设备 API 24 生效 |
-| `compileSdk` | 35 | 仅编译用，可按工具链可用版本微调 |
-| JDK | Temurin 17 | AGP 8.x 的硬性要求 |
-| AGP / Gradle / Kotlin | 8.x / 8.x / 2.x | Kotlin 2.x 自带 Compose 编译器插件 |
+| `compileSdk` | 35 | 仅编译用；对应 build-tools 35.0.0 已安装 |
+| JDK | Temurin 17.0.20.1 | AGP 8.x 的硬性要求；已安装 |
+| AGP / Gradle / Kotlin | 8.7.3 / 8.9 / 2.0.21 | 已落地到工程；Kotlin 2.x 自带 Compose 编译器插件 |
 | UI | Jetpack Compose + Material 3 | 老平板需扁平化，见第 8 节性能门禁 |
 
 ### 3.3 环境搭建步骤
 
 ```powershell
-# 1) JDK 17
-winget install --id EclipseAdoptium.Temurin.17.JDK -e
+# 一键完成（幂等，可重复执行；普通终端即可，无需管理员）
+scripts\setup-toolchain.bat                  # JDK 17 + Android SDK + Gradle + wrapper
+scripts\setup-toolchain.bat -ConfigureOnly   # 仅修 PATH / 环境变量 / wrapper 镜像
+scripts\doctor.bat                           # 只读自检
+scripts\device-precheck.bat                  # 设备能力 -> docs\device-baseline.md
+scripts\build-and-install.bat                # 构建 + 装机 + 启动自检
 
-# 2) Android 命令行工具：下载后解压到 %LOCALAPPDATA%\Android\Sdk\cmdline-tools\latest
-#    直连不通时使用镜像（如腾讯云 Android SDK 镜像 / 清华 AOSP 镜像）
-
-# 3) 安装 SDK 组件并配置环境变量
-$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
-$env:Path += ";$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\cmdline-tools\latest\bin"
-sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-adb version
-
-# 4) 设备预检：记录平板真实能力
-adb devices
-adb shell getprop ro.build.version.sdk      # 预期 24
-adb shell getprop ro.product.cpu.abi        # arm64-v8a 或 armeabi-v7a
-adb shell cat /proc/meminfo | Select-String "MemTotal"
-adb shell wm size ; adb shell wm density
+# 直连不通时脚本会自动探测本地代理端口（默认 7890），也可显式指定：
+scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 ```
+
+实际落盘：JDK `C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot`、SDK `D:\Android\Sdk`、Gradle `D:\Android\gradle-8.9`。
+实际安装的 SDK 组件：`platform-tools`、`platforms;android-34`、`platforms;android-35`、`build-tools;35.0.0`、`cmdline-tools;latest`。
 
 **镜像兜底**：Maven 依赖走阿里云镜像（写入 `settings.gradle.kts` 的 `pluginManagement` 与 `dependencyResolutionManagement`）；Android SDK 组件走腾讯 / 清华镜像。两者都不通时，需向用户申请联网授权后重试。
 
-**预检产出**：设备能力记录（API 版本、ABI、内存、分辨率、密度），用于决定是否需要按单 ABI 打包、以及展示页字号与卡片尺寸。
+**预检产出**：已归档到 `docs/device-baseline.md`（API 24 / arm64-v8a / 3955MB / 1600x2560 / 密度 320→426），据此确定单 ABI 打包与展示页字号。
+
 ## 4. 系统架构与接口契约
 
 ### 4.1 角色模型
@@ -153,13 +149,14 @@ adb shell wm size ; adb shell wm density
 
 ## 6. 分阶段实施与验收
 
-### Phase 0：环境与预检
+### Phase 0：环境与预检 —— 已完成（2026-10-05）
 
-- 安装 JDK 17、Android SDK 命令行工具、platform-tools、`platforms;android-34`、`build-tools;34.0.0`，配置好镜像源。
-- 用 `adb` 读取平板 API 版本、ABI、内存、分辨率与密度并记录。
-- 建最小工程，跑通 Hello World 安装到真机。
+- 工具链就绪：JDK 17.0.20.1、Android SDK（platform-tools 37.0.1 / platforms 34+35 / build-tools 35.0.0）、Gradle 8.9，wrapper 已生成并指向国内镜像。
+- 设备预检完成：Teclast T10(E3C6) / API 24 / arm64-v8a / 3955MB / 1600x2560 / 密度 320→426，归档于 `docs/device-baseline.md`。
+- 最小工程跑通：Compose Hello World 构建出 `app-debug.apk`（约 9.2MB），`adb install` 返回 Success，启动后进程存活且 crash 缓冲区无 `FATAL EXCEPTION`。
+- 运维脚本：`scripts\setup-toolchain.bat`、`doctor.bat`、`device-precheck.bat`、`build-and-install.bat`（实现为同名 `.ps1`）。
 
-**验收**：`adb install` 成功、平板能启动应用；设备能力记录归档到文档。
+**验收**：`adb install` 成功、平板能启动应用；设备能力记录已归档 → 达成。
 
 ### Phase 1：平板单机 MVP
 
@@ -264,7 +261,7 @@ adb shell wm size ; adb shell wm density
 - 只做展示 + 管理，明确不做点单、收银、叫号、打印。
 - 仓库当前不是 git 仓库；是否 `git init` 由用户决定，本期不擅自初始化。
 
-## 附录 A：未来工程目录结构（规划，本期不创建）
+## 附录 A：工程目录结构（Phase 0 已创建 app / docs / scripts 三个顶层目录）
 
 ```text
 TanPaiMenu/
@@ -283,6 +280,6 @@ TanPaiMenu/
 
 ## 附录 B：待确认事项（实施前需落实）
 
-1. 平板 ABI 与内存实测值（Phase 0 产出），决定打包 ABI 与图片规格。
-2. 平板是否能开热点；若不能，需确保摊位现场有稳定 WiFi。
-3. 是否需要 `git init` 并建立首次提交。
+1. ~~平板 ABI 与内存实测值~~ 已落实：arm64-v8a / 3955MB / 1600x2560 / 密度 426，见 `docs/device-baseline.md`；打包只出 arm64-v8a。
+2. 平板能否开热点；若不能，需确保摊位现场有稳定 WiFi。**（仍待确认）**
+3. ~~`git init` 与首次提交~~ 已落实：仓库建于 `main` 分支，远端 `git@github.com:Queqiongtao/TanPaiMenu.git`。

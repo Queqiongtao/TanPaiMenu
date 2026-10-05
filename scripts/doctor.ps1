@@ -43,7 +43,9 @@ $sdkManager = Join-Path $SdkRoot 'cmdline-tools\latest\bin\sdkmanager.bat'
 $adb        = Join-Path $SdkRoot 'platform-tools\adb.exe'
 if (Test-Path $sdkManager) {
     $env:JAVA_HOME = $JdkHome
-    Ok ("sdkmanager " + (Invoke-Native -Exe $sdkManager -Arguments @('--version', "--sdk_root=$SdkRoot") -Quiet).Output)
+    $smOut  = (Invoke-Native -Exe $sdkManager -Arguments @('--version', "--sdk_root=$SdkRoot") -Quiet).Output
+    $smLine = @(($smOut -split "`r?`n") | Where-Object { $_ -match '^\d' } | Select-Object -Last 1)
+    Ok ("sdkmanager " + $(if ($smLine.Count -gt 0) { $smLine[0] } else { 'ok' }))
     $list = (Invoke-Native -Exe $sdkManager -Arguments @('--list_installed', "--sdk_root=$SdkRoot") -Quiet).Output
     foreach ($pkg in 'platform-tools', 'platforms;android-34', 'platforms;android-35', 'build-tools;35.0.0') {
         if ($list -match [regex]::Escape($pkg)) { Ok "已安装 $pkg" } else { $problems += "缺少 SDK 包: $pkg" }
