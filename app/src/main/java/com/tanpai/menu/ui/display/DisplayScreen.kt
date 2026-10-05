@@ -1,6 +1,7 @@
 package com.tanpai.menu.ui.display
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +67,17 @@ private val CardSpacing = 10.dp
 private val CardMaxHeight = 96.dp
 private val CardMinHeight = 72.dp
 private val ThumbnailSize = 56.dp
+
+/** 卡片内横向内边距。 */
+private val CardHorizontalPadding = 10.dp
+/** 缩略图与文字之间的间距。 */
+private val ThumbnailGap = 8.dp
+/** 菜名 / 价格 / 状态三列之间的间距。 */
+private val ColumnGap = 5.dp
+/** 价格列定宽，保证跨卡片左边界一致。 */
+private val PriceColumnWidth = 100.dp
+/** 状态列定宽（有货 / 余 N / 已售完徽标共用）。 */
+private val StatusColumnWidth = 60.dp
 
 @Composable
 fun DisplayScreen(
@@ -228,39 +240,42 @@ fun DishCard(dish: Dish, showStockHint: Boolean = true, modifier: Modifier = Mod
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = CardHorizontalPadding, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.alpha(contentAlpha)) { DishThumbnail(dish) }
-            Spacer(modifier = Modifier.width(12.dp))
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
+            Spacer(modifier = Modifier.width(ThumbnailGap))
+            Text(
+                text = dish.name,
+                modifier = Modifier
+                    .weight(1f)
+                    .basicMarquee(initialDelayMillis = 1200, repeatDelayMillis = 1600)
+                    .alpha(contentAlpha),
+                style = MaterialTheme.typography.titleLarge,
+                fontFamily = ChineseFontFamily,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip
+            )
+            Spacer(modifier = Modifier.width(ColumnGap))
+            Text(
+                text = "${PriceFormatter.formatYuan(dish.priceCents)} / ${dish.unit}",
+                modifier = Modifier
+                    .width(PriceColumnWidth)
+                    .alpha(contentAlpha),
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                fontFamily = ChineseFontFamily,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.width(ColumnGap))
+            Box(
+                modifier = Modifier.width(StatusColumnWidth),
+                contentAlignment = Alignment.CenterStart
             ) {
-                Text(
-                    text = dish.name,
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .alpha(contentAlpha),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontFamily = ChineseFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "${PriceFormatter.formatYuan(dish.priceCents)} / ${dish.unit}",
-                    modifier = Modifier.alpha(contentAlpha),
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
-                    fontFamily = ChineseFontFamily,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1
-                )
                 if (dish.soldOut) {
-                    Spacer(modifier = Modifier.width(8.dp))
                     SoldOutBadge()
                 } else if (showStockHint) {
-                    Spacer(modifier = Modifier.width(8.dp))
                     val status = stockStatus(dish)
                     Text(
                         text = status.text,
@@ -331,7 +346,7 @@ private fun SoldOutBadge(modifier: Modifier = Modifier) {
     ) {
         Text(
             text = stringResource(R.string.display_sold_out),
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = MaterialTheme.typography.bodyMedium,
             fontFamily = ChineseFontFamily,
             color = MaterialTheme.colorScheme.onError,
