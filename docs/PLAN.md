@@ -1,6 +1,13 @@
 ﻿# TanPaiMenu 摆摊电子菜单 —— 开发计划
 
-> 版本：v1.1 ｜ 状态：Phase 0 已完成，待进入 Phase 1 ｜ 更新日期：2026-10-05
+> 版本：v1.2 ｜ 状态：Phase 0 已完成，待进入 Phase 1 ｜ 更新日期：2026-10-05
+
+修订历史：
+
+| 版本 | 日期 | 变更 |
+| --- | --- | --- |
+| v1.1 | 2026-10-05 | Phase 0 收尾：设备基线归档与计划状态。 |
+| v1.2 | 2026-10-05 | 接口 / 数据契约细节拆分到 `docs/design/`；新增各阶段文档产出清单；修订过时条目。 |
 
 ## 1. 项目概述
 
@@ -95,7 +102,7 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - **命令走 REST**：语义清晰、可用 `curl` 独立验证、失败易回滚。
 - **推送走 WebSocket**：单向广播变更事件，客户端只订阅、不做双向合并。
 - **单写者队列**：主机的所有写操作进入串行队列处理，天然消除并发写冲突，无需版本合并算法。
-- **一致性**：每条变更带自增 `version`，客户端丢弃小于本地版本的过期消息。
+- **一致性**：`version` 为全局单调递增（存 `app_meta`，单写者事务内 +1），快照与 WS 事件都携带；客户端丢弃小于本地版本的过期消息。详见 `docs/design/0001-菜单数据模型与接口契约.md`。
 - **配对与鉴权**：主机生成随机 token；二维码内容为 `http://<ip>:<port>/#pair=<token>`；客户端请求带 `Authorization: Bearer <token>`；主机设置页可一键换 token 以踢掉全部客户端。
 - **服务发现**：`NsdManager` 自动发现 + 二维码扫码 + 手动输入 IP 三种方式兜底。
 - **端口**：默认 8080，可配置（1024-65535）。
@@ -115,11 +122,16 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 | GET | `/images/{name}` | 读取图片字节流 |
 | GET | `/devices` | 在线客户端列表 |
 
+完整契约（请求 / 响应示例、字段与校验、错误码、幂等）见 [`docs/design/0001-菜单数据模型与接口契约.md`](design/0001-菜单数据模型与接口契约.md)。
+
 ### 4.4 WebSocket `/ws`
 
 1. 连接建立后先下发一条全量 `snapshot`。
 2. 之后单向下推事件：`dish.updated`、`dish.deleted`、`category.updated`、`category.deleted`、`device.joined`、`device.left`。
 3. 每条事件携带递增 `version`；客户端丢弃过期消息，不做合并。
+4. 断线重连：重新调用 `/state` 取全量快照；菜单 ≤ 30 道，不做增量补齐。
+
+报文字段与重连规则见 [`docs/design/0001-菜单数据模型与接口契约.md`](design/0001-菜单数据模型与接口契约.md)。
 
 ### 4.5 客户端行为
 
@@ -134,7 +146,7 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 | 实体 | 字段 |
 | --- | --- |
 | `Category` | id、name、sortOrder、enabled、updatedAt |
-| `Dish` | id、categoryId、name、priceCents、unit、imagePath、stockEnabled、stockCount、soldOut、description、sortOrder、enabled、updatedAt、version |
+| `Dish` | id、categoryId、name、priceCents、unit、imagePath、stockEnabled、stockCount、soldOut、description、sortOrder、enabled、updatedAt |
 | `SaleRecord` | id、dishId、qty、createdAt、deviceId（支撑卖出与撤销，以及今日销量） |
 | `ConnectedDevice` | id、name、role、lastSeen |
 
@@ -146,6 +158,11 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - **图片**：压缩至长边不超过 1280px、JPEG 质量 80，存 `filesDir/images/<uuid>.jpg`；菜品图非必填，无图时显示菜名首字占位卡。
 - **设置项**（SharedPreferences）：店名、adminPin（加盐 SHA-256，不存明文）、pairToken、端口、开机自启开关。
 - **备份**：支持整库导出 / 导入 JSON 文件，用于换机与误操作恢复。
+- **主键与时间**：主键为自增 `Long`；时间字段存 UTC epoch 毫秒，JSON 传输用 ISO-8601 UTC 字符串。
+- **版本号**：全局单调递增 `version` 存于 `app_meta` 表，业务实体不再各自维护。
+- **删除级联**：删除分类时其下菜品软删除（`enabled = false`）；历史 `SaleRecord` 保留以支持撤销与销量统计。
+
+字段类型与约束、完整 REST / WS 报文见 [`docs/design/0001-菜单数据模型与接口契约.md`](design/0001-菜单数据模型与接口契约.md)。
 
 ## 6. 分阶段实施与验收
 
@@ -155,6 +172,8 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - 设备预检完成：Teclast T10(E3C6) / API 24 / arm64-v8a / 3955MB / 1600x2560 / 密度 320→426，归档于 `docs/device-baseline.md`。
 - 最小工程跑通：Compose Hello World 构建出 `app-debug.apk`（约 9.2MB），`adb install` 返回 Success，启动后进程存活且 crash 缓冲区无 `FATAL EXCEPTION`。
 - 运维脚本：`scripts\setup-toolchain.bat`、`doctor.bat`、`device-precheck.bat`、`build-and-install.bat`（实现为同名 `.ps1`）。
+
+**文档产出**：`docs/device-baseline.md`（已完成）、`docs/architecture.md`（骨架）。
 
 **验收**：`adb install` 成功、平板能启动应用；设备能力记录已归档 → 达成。
 
@@ -166,6 +185,8 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - 软 Kiosk：开机自启（`BOOT_COMPLETED`）、屏幕常亮、沉浸式全屏隐藏系统栏、可选注册为 Home 以拦截 Home 键、长按标题 5 秒弹出 PIN 才能退出。
 - 菜单 JSON 导出 / 导入备份。
 
+**文档产出**：`docs/design/0001-菜单数据模型与接口契约.md`、`0003-平板运行形态与门禁.md`、`0004-图片处理与数据备份.md`；更新 `docs/architecture.md` 分层与关键流程章节。
+
 **验收**：平板断网状态下可完成建菜单到沽清的完整流程（建菜单 → 展示 → 卖出减量 → 沽清），重启后数据完整；顾客无法通过 Home / 返回键退出。
 
 ### Phase 2：局域网主机
@@ -175,6 +196,8 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - 图片上传通道与静态图片读取。
 - 前台服务保活，避免息屏后被系统回收；平板设置页展示在线设备列表。
 
+**文档产出**：`docs/design/0002-局域网配对与同步.md`；更新 `docs/architecture.md` 关键流程与数据流章节。
+
 **验收**：用 `curl` 与浏览器逐条验证接口契约；token 错误返回 401；两台设备连接后均能收到广播。
 
 ### Phase 3：手机客户端
@@ -183,6 +206,8 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - 客户端管理 UI：完整菜单编辑（含图片上传），复用 Phase 1 的 Compose 组件。
 - 乐观更新 + 失败回滚；断线只读条幅与自动重连。
 
+**文档产出**：更新 `docs/design/0002-局域网配对与同步.md` 客户端行为小节与 `docs/architecture.md` 客户端模块章节。
+
 **验收**：手机上改价 / 传图，平板展示页 1 秒内更新；拔网后手机变只读，恢复网络后自动重连并回到可编辑状态。
 
 ### Phase 4：动画与打磨（最后做）
@@ -190,12 +215,15 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - 沽清盖章动画、新品 / 推荐高亮、无操作时的图片轮播或轻量自动滚动、开机过渡。
 - 每一项动画都必须通过性能门禁，不达标即回退为静态效果。
 
+**文档产出**：`docs/design/0005-发布分发与现场排障.md`；更新 `docs/architecture.md` 构建与发布章节。
+
 **验收**：加入动画后滚动帧率与冷启动时间仍满足第 8 节门禁。
 
 ### 横切工作
 
 - 统一日志与错误提示；服务异常自恢复。
 - `adb` 一键安装脚本，降低迭代成本。
+- 日志落盘与一键收集脚本（`scripts/collect-logs.*`，Phase 1 交付）；日志格式与错误码见 `docs/design/0001`、`docs/architecture.md`。
 
 ## 7. 测试计划
 
@@ -259,7 +287,9 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - 图片支持相册选择与拍照两种来源，菜品图非必填。
 - 管理权限：平板端用 PIN 进入；手机端凭配对 token 授权（可选再开 PIN）。
 - 只做展示 + 管理，明确不做点单、收银、叫号、打印。
-- 仓库当前不是 git 仓库；是否 `git init` 由用户决定，本期不擅自初始化。
+- 仓库为 git 仓库（`main` 分支，远端 GitHub）；协作规则见 `AGENTS.md`。
+- 局域网传输为明文 HTTP + Bearer token，未启用 TLS；建议摊位使用专用网络或平板热点（见 `docs/design/0002`）。
+- v1 使用 debug 签名 APK 分发；正式签名与渠道留待 Phase 4（见 `docs/design/0005`）。
 
 ## 附录 A：工程目录结构（Phase 0 已创建 app / docs / scripts 三个顶层目录）
 
@@ -270,16 +300,25 @@ TanPaiMenu/
 │     ├─ data/        # Room 实体、DAO、Repository、设置
 │     ├─ host/        # 主机侧：HTTP/WS 服务、单写者队列、配对
 │     ├─ client/      # 客户端侧：发现、连接、镜像状态
+│     ├─ net/         # REST 客户端、WS 客户端、DTO 与序列化
 │     ├─ ui/display/  # 顾客展示页
 │     ├─ ui/admin/    # 管理与设置页（双端共用）
+│     ├─ ui/client/   # 手机客户端管理页（复用 admin 组件）
 │     ├─ imaging/     # 压缩、存储、加载
 │     └─ kiosk/       # 自启、常亮、沉浸、PIN 门禁
 ├─ docs/
+│  ├─ PLAN.md          # 计划与阶段（本文件）
+│  ├─ architecture.md  # 架构与关键逻辑
+│  ├─ design/          # 功能设计文档（NNNN-中文简述.md）
+│  └─ device-baseline.md
 └─ scripts/           # adb 一键安装等
 ```
+
+各模块职责与依赖方向见 `docs/architecture.md` 第 2 节。
 
 ## 附录 B：待确认事项（实施前需落实）
 
 1. ~~平板 ABI 与内存实测值~~ 已落实：arm64-v8a / 3955MB / 1600x2560 / 密度 426，见 `docs/device-baseline.md`；打包只出 arm64-v8a。
-2. 平板能否开热点；若不能，需确保摊位现场有稳定 WiFi。**（仍待确认）**
+2. 平板能否开热点；若不能，需确保摊位现场有稳定 WiFi。**（仍待确认，Phase 2 前必须落实）**
 3. ~~`git init` 与首次提交~~ 已落实：仓库建于 `main` 分支，远端 `git@github.com:Queqiongtao/TanPaiMenu.git`。
+4. 手机端是否在 token 之外再加 PIN。**（待确认，默认不加，见 `docs/design/0002`）**
