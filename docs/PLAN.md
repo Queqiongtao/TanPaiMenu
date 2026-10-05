@@ -298,6 +298,7 @@ TanPaiMenu/
 ├─ app/
 │  └─ src/main/java/com/tanpai/menu/
 │     ├─ data/        # Room 实体、DAO、Repository、设置
+│     ├─ domain/      # 纯业务规则（卖出 / 撤销策略、价格格式化）
 │     ├─ host/        # 主机侧：HTTP/WS 服务、单写者队列、配对
 │     ├─ client/      # 客户端侧：发现、连接、镜像状态
 │     ├─ net/         # REST 客户端、WS 客户端、DTO 与序列化
