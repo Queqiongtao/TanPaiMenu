@@ -137,7 +137,7 @@ fun DisplayScreen(
 }
 
 /**
- * 顶部条：店名水平居中（长按 2 秒进入管理），分类胶囊靠右（仅多分类时出现）。
+ * 顶部条：店名做成水平居中的淡紫圆角胶囊（长按 2 秒进入管理），分类胶囊靠右（仅多分类时出现）。
  * 店名与胶囊分别限宽（0.4 / 0.3 顶栏宽），最大宽度之和不超过顶栏宽，保证不重叠。
  * 始终渲染，保证分类为空时管理入口仍可达。
  */
@@ -155,8 +155,7 @@ private fun DisplayTopBar(
             .height(TopBarHeight)
     ) {
         val storeNameMaxWidth = minOf(StoreNameMaxWidth, maxWidth * StoreNameWidthFraction)
-        Text(
-            text = storeName.ifBlank { stringResource(R.string.app_name) },
+        Surface(
             modifier = Modifier
                 .align(Alignment.Center)
                 .widthIn(max = storeNameMaxWidth)
@@ -167,16 +166,23 @@ private fun DisplayTopBar(
                             if (released == null) onRequestAdmin()
                         }
                     )
-                }
-                .padding(vertical = 4.dp),
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontSize = 24.sp,
-                lineHeight = 30.sp
-            ),
-            fontFamily = ChineseFontFamily,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+                },
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = storeName.ifBlank { stringResource(R.string.app_name) },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontSize = 28.sp,
+                    lineHeight = 34.sp
+                ),
+                fontFamily = ChineseFontFamily,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         if (categories.size > 1) {
             Row(
                 modifier = Modifier
