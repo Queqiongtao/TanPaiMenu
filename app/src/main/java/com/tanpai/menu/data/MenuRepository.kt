@@ -36,6 +36,8 @@ class MenuRepository(
     suspend fun currentVersion(): Long =
         appMetaDao.get(VERSION_KEY)?.value?.toLongOrNull() ?: 0L
 
+    suspend fun allImagePaths(): Set<String> = dishDao.allImagePaths().toSet()
+
     suspend fun seedIfEmpty() {
         if (categoryDao.count() > 0) return
         db.withTransaction {

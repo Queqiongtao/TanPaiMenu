@@ -50,6 +50,7 @@ import com.tanpai.menu.R
 import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.PriceFormatter
+import com.tanpai.menu.kiosk.KeepScreenOn
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -60,6 +61,7 @@ fun DisplayScreen(
     onRequestAdmin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    KeepScreenOn()
     val menu by viewModel.menu.collectAsState()
     val categories = menu.categories
     var selectedCategoryId by rememberSaveable { mutableLongStateOf(0L) }

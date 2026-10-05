@@ -24,6 +24,7 @@ import com.tanpai.menu.R
 import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.PinManager
 import com.tanpai.menu.data.SettingsStore
+import com.tanpai.menu.imaging.ImageStore
 import com.tanpai.menu.ui.admin.AdminScreen
 import com.tanpai.menu.ui.admin.AdminViewModel
 import com.tanpai.menu.ui.display.DisplayScreen
@@ -39,7 +40,8 @@ private enum class PinDialog { None, Setup, Enter }
 fun TanPaiMenuApp(
     repository: MenuRepository,
     settings: SettingsStore,
-    pinManager: PinManager
+    pinManager: PinManager,
+    imageStore: ImageStore
 ) {
     var screen by rememberSaveable { mutableStateOf(SCREEN_DISPLAY) }
     var pinDialog by remember { mutableStateOf(PinDialog.None) }
@@ -47,7 +49,7 @@ fun TanPaiMenuApp(
     val displayViewModel: DisplayViewModel =
         viewModel(factory = DisplayViewModel.factory(repository))
     val adminViewModel: AdminViewModel =
-        viewModel(factory = AdminViewModel.factory(repository, settings))
+        viewModel(factory = AdminViewModel.factory(repository, settings, imageStore))
 
     if (screen == SCREEN_ADMIN) {
         AdminScreen(viewModel = adminViewModel, onExit = { screen = SCREEN_DISPLAY })

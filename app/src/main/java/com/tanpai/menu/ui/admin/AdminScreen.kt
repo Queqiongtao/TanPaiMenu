@@ -13,10 +13,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -32,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tanpai.menu.R
@@ -40,6 +44,8 @@ import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.domain.SellError
 import com.tanpai.menu.domain.SellResult
+import com.tanpai.menu.kiosk.exitToHome
+import com.tanpai.menu.kiosk.openHomeSettings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +68,7 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
     var showNewDish by remember { mutableStateOf(false) }
     var editingDish by remember { mutableStateOf<Dish?>(null) }
     var deletingDish by remember { mutableStateOf<Dish?>(null) }
+    var showSettings by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
 
     val errSoldOut = stringResource(R.string.admin_err_sold_out)
@@ -86,6 +93,9 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             TopAppBar(
                 title = { Text(stringResource(R.string.admin_title)) },
                 actions = {
+                    TextButton(onClick = { showSettings = true }) {
+                        Text(stringResource(R.string.admin_settings))
+                    }
                     TextButton(onClick = onExit) {
                         Text(stringResource(R.string.admin_back_to_display))
                     }
@@ -216,6 +226,7 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
     }
     deletingCategory?.let { category ->
         ConfirmDialog(
+            title = stringResource(R.string.admin_delete),
             text = stringResource(R.string.admin_delete_category_confirm, category.name),
             onConfirm = { viewModel.deleteCategory(category.id) },
             onDismiss = { deletingCategory = null }
@@ -225,6 +236,8 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
         DishEditDialog(
             initial = null,
             categoryId = selectedCategory.id,
+            onImportImage = { viewModel.importImage(it) },
+            onCreateCaptureUri = { viewModel.createCaptureUri() },
             onConfirm = { viewModel.createDish(it) },
             onDismiss = { showNewDish = false }
         )
@@ -233,15 +246,104 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
         DishEditDialog(
             initial = dish,
             categoryId = dish.categoryId,
+            onImportImage = { viewModel.importImage(it) },
+            onCreateCaptureUri = { viewModel.createCaptureUri() },
             onConfirm = { viewModel.updateDish(it) },
             onDismiss = { editingDish = null }
         )
     }
     deletingDish?.let { dish ->
         ConfirmDialog(
+            title = stringResource(R.string.admin_delete),
             text = stringResource(R.string.admin_delete_dish_confirm, dish.name),
-            onConfirm = { viewModel.deleteDish(dish.id) },
+            onConfirm = { viewModel.deleteDish(dish) },
             onDismiss = { deletingDish = null }
+        )
+    }
+    if (showSettings) {
+        SettingsDialog(
+            storeName = viewModel.storeName,
+            autostart = viewModel.autostartEnabled,
+            onStoreNameChange = { viewModel.updateStoreName(it) },
+            onAutostartChange = { viewModel.updateAutostart(it) },
+            onDismiss = { showSettings = false }
+        )
+    }
+}
+
+@Composable
+private fun SettingsDialog(
+    storeName: String,
+    autostart: Boolean,
+    onStoreNameChange: (String) -> Unit,
+    onAutostartChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var name by remember { mutableStateOf(storeName) }
+    var auto by remember { mutableStateOf(autostart) }
+    var confirmExit by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_title)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.settings_store_name)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(stringResource(R.string.settings_autostart))
+                    Switch(checked = auto, onCheckedChange = { auto = it })
+                }
+                TextButton(
+                    onClick = { openHomeSettings(context) },
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text(stringResource(R.string.settings_set_home))
+                }
+                TextButton(
+                    onClick = { confirmExit = true },
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text(stringResource(R.string.settings_exit_home))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onStoreNameChange(name.trim())
+                    onAutostartChange(auto)
+                    onDismiss()
+                }
+            ) { Text(stringResource(R.string.admin_confirm)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.admin_cancel)) }
+        }
+    )
+
+    if (confirmExit) {
+        ConfirmDialog(
+            title = stringResource(R.string.settings_exit_home),
+            text = stringResource(R.string.settings_exit_confirm),
+            onConfirm = {
+                onStoreNameChange(name.trim())
+                onAutostartChange(auto)
+                exitToHome(context)
+                onDismiss()
+            },
+            onDismiss = { confirmExit = false }
         )
     }
 }

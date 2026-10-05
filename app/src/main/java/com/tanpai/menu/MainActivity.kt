@@ -24,11 +24,22 @@ class MainActivity : ComponentActivity() {
                     TanPaiMenuApp(
                         repository = container.menuRepository,
                         settings = container.settingsStore,
-                        pinManager = container.pinManager
+                        pinManager = container.pinManager,
+                        imageStore = container.imageStore
                     )
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideSystemBars()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
     }
 
     private fun hideSystemBars() {

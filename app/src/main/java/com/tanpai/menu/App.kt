@@ -6,6 +6,7 @@ import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.PinManager
 import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.data.db.TpDatabase
+import com.tanpai.menu.imaging.ImageStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,6 +17,7 @@ class AppContainer(context: Context) {
     val menuRepository: MenuRepository = MenuRepository(database)
     val settingsStore: SettingsStore = SettingsStore(context)
     val pinManager: PinManager = PinManager(settingsStore)
+    val imageStore: ImageStore = ImageStore(context)
 }
 
 class App : Application() {
@@ -28,6 +30,9 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        appScope.launch { container.menuRepository.seedIfEmpty() }
+        appScope.launch {
+            container.menuRepository.seedIfEmpty()
+            container.imageStore.deleteOrphans(container.menuRepository.allImagePaths())
+        }
     }
 }
