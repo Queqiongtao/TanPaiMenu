@@ -29,4 +29,7 @@ interface CategoryDao {
 
     @Query("UPDATE category SET enabled = 0, updatedAt = :updatedAt WHERE id = :id")
     suspend fun softDelete(id: Long, updatedAt: Long)
+
+    @Query("DELETE FROM category")
+    suspend fun deleteAll()
 }

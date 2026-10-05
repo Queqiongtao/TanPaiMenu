@@ -7,6 +7,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.tanpai.menu.backup.BackupManager
+import com.tanpai.menu.backup.BackupResult
 import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.MenuSnapshot
 import com.tanpai.menu.data.SettingsStore
@@ -15,13 +17,16 @@ import com.tanpai.menu.domain.SellResult
 import com.tanpai.menu.imaging.ImageStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class AdminViewModel(
     private val repository: MenuRepository,
     private val settings: SettingsStore,
-    private val imageStore: ImageStore
+    private val imageStore: ImageStore,
+    private val backupManager: BackupManager
 ) : ViewModel() {
 
     val deviceId: String = settings.deviceId
@@ -34,6 +39,9 @@ class AdminViewModel(
 
     val menu: StateFlow<MenuSnapshot> = repository.observeMenu()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MenuSnapshot())
+
+    private val _backupResult = MutableStateFlow<BackupResult?>(null)
+    val backupResult: StateFlow<BackupResult?> = _backupResult.asStateFlow()
 
     fun updateStoreName(value: String) {
         storeName = value
@@ -50,6 +58,18 @@ class AdminViewModel(
     suspend fun importImage(uri: Uri): String? = imageStore.importFromUri(uri)
 
     fun deleteImage(imagePath: String?) = imageStore.delete(imagePath)
+
+    fun exportBackup(directory: Uri) {
+        viewModelScope.launch { _backupResult.value = backupManager.exportTo(directory) }
+    }
+
+    fun importBackup(directory: Uri) {
+        viewModelScope.launch { _backupResult.value = backupManager.importFrom(directory) }
+    }
+
+    fun clearBackupResult() {
+        _backupResult.value = null
+    }
 
     fun createCategory(name: String, sortOrder: Int) {
         viewModelScope.launch { repository.createCategory(name, sortOrder) }
@@ -94,11 +114,12 @@ class AdminViewModel(
         fun factory(
             repository: MenuRepository,
             settings: SettingsStore,
-            imageStore: ImageStore
+            imageStore: ImageStore,
+            backupManager: BackupManager
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                AdminViewModel(repository, settings, imageStore) as T
+                AdminViewModel(repository, settings, imageStore, backupManager) as T
         }
     }
 }

@@ -24,10 +24,14 @@ app/src/main/java/com/tanpai/menu/
 ├─ ui/admin/    # 管理与设置页（双端共用）
 ├─ ui/client/   # 手机客户端管理页（复用 admin 组件）
 ├─ imaging/     # 压缩、存储、加载
+├─ backup/      # 备份格式（format 1）与导出 / 导入
+├─ logging/     # TpLog 落盘日志
 └─ kiosk/       # 自启、常亮、沉浸、PIN 门禁
 ```
 
 模块边界：`host` 与 `client` 不互相引用；跨模块只经 `net` / `data` 的接口与 DTO 交互。
+
+Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；`host`、`client`、`net`、`ui/client` 为 Phase 2 / 3 预留。
 
 ## 3. 关键流程与数据流
 
@@ -35,6 +39,14 @@ app/src/main/java/com/tanpai/menu/
 - 卖出：`ui/admin` 命令（乐观更新）→ REST → `host` 单写者队列 → 事务（写 `SaleRecord` + 扣库存 + 全局 `version` +1）→ WS 广播 → 各端应用。
 - 同步：客户端 `/state` 全量对齐 + WS 事件增量；用 `version` 判新旧；断线重连重取快照。
 - 配对：主机生成 token → 二维码 / NSD / 手输 → 客户端带 token 请求。
+
+Phase 1 已实现的单机流程（含实现位置）：
+
+- 启动：`App.onCreate` → `TpLog.init` → `MenuRepository.seedIfEmpty` → `ImageStore.deleteOrphans`。
+- 卖出 / 撤销：`ui/admin/AdminViewModel` → `MenuRepository.sell/unsell`（事务内 `SellPolicy` / `UnsellPolicy`，并令 `version` +1）。
+- 图片：`ui/admin/AdminDialogs` 相册 / 拍照 → `ImageStore.importFromUri` → `filesDir/images/<uuid>.jpg`。
+- 备份：`backup/BackupManager` 按 format 1 导出 `backup.json` + `images/`；导入先校验后整库覆盖（`MenuRepository.replaceAll`）。
+- 门禁：`ui/TanPaiMenuApp`（长按 5 秒 + PIN）、`data/PinManager`（失败锁定）、`kiosk/Kiosk`（沉浸 / 常亮 / 退出到桌面）。
 
 ## 4. 接口与数据模型
 
@@ -46,6 +58,8 @@ app/src/main/java/com/tanpai/menu/
 
 - 统一错误码与响应格式：见 `docs/design/0001` 第 3.1 节。
 - 日志：`TpLog` 写 `filesDir/logs/app-<date>.log`，保留 7 天；收集脚本 `scripts/collect-logs.*`（Phase 1 交付）。
+
+实现：`logging/TpLog.kt`（异步落盘；崩溃同步落盘并挂默认异常处理器）与 `scripts/collect-logs.ps1|.bat`（产出 device.txt、logcat.txt、app-logs/）。已实测：按天切分、UTF-8 中文正常、保留 7 天。
 
 ## 6. 数据迁移
 
@@ -64,3 +78,4 @@ app/src/main/java/com/tanpai/menu/
 | --- | --- | --- |
 | 2026-10-05 | 建立架构文档骨架 | — |
 | 2026-10-05 | 填充分层与模块、关键流程、错误与日志、数据迁移、构建与发布 | 0001、0002、0005 |
+| 2026-10-05 | 回填 Phase 1 实现位置：图片、备份、日志、门禁与单机流程 | 0001、0003、0004、0005 |

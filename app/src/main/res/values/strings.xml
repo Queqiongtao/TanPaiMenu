@@ -55,4 +55,13 @@
     <string name="settings_set_home">设为默认桌面</string>
     <string name="settings_exit_home">退出到桌面</string>
     <string name="settings_exit_confirm">确定退出应用并回到桌面？</string>
+    <string name="settings_export_backup">导出备份</string>
+    <string name="settings_import_backup">导入备份</string>
+    <string name="settings_import_confirm">导入将覆盖当前全部菜单与图片，确定继续？</string>
+    <string name="backup_result_title">备份结果</string>
+    <string name="backup_done">操作完成：分类 %1$d 个、菜品 %2$d 道、图片 %3$d 张</string>
+    <string name="backup_error_not_found">所选目录中没有找到 backup.json</string>
+    <string name="backup_error_format">备份版本不兼容，无法导入</string>
+    <string name="backup_error_corrupt">备份文件损坏或缺少必要字段</string>
+    <string name="backup_error_io">备份文件读写失败</string>
 </resources>

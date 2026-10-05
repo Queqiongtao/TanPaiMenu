@@ -1,5 +1,8 @@
 package com.tanpai.menu.ui.admin
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +42,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tanpai.menu.R
+import com.tanpai.menu.backup.BackupFailure
+import com.tanpai.menu.backup.BackupResult
 import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.PriceFormatter
@@ -51,6 +56,7 @@ import com.tanpai.menu.kiosk.openHomeSettings
 @Composable
 fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
     val menu by viewModel.menu.collectAsState()
+    val backupResult by viewModel.backupResult.collectAsState()
     var selectedCategoryId by rememberSaveable { mutableLongStateOf(0L) }
 
     LaunchedEffect(menu.categories) {
@@ -266,6 +272,10 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             autostart = viewModel.autostartEnabled,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAutostartChange = { viewModel.updateAutostart(it) },
+            backupResult = backupResult,
+            onExportBackup = { viewModel.exportBackup(it) },
+            onImportBackup = { viewModel.importBackup(it) },
+            onClearBackupResult = { viewModel.clearBackupResult() },
             onDismiss = { showSettings = false }
         )
     }
@@ -277,12 +287,24 @@ private fun SettingsDialog(
     autostart: Boolean,
     onStoreNameChange: (String) -> Unit,
     onAutostartChange: (Boolean) -> Unit,
+    backupResult: BackupResult?,
+    onExportBackup: (Uri) -> Unit,
+    onImportBackup: (Uri) -> Unit,
+    onClearBackupResult: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(storeName) }
     var auto by remember { mutableStateOf(autostart) }
     var confirmExit by remember { mutableStateOf(false) }
+    var pendingImport by remember { mutableStateOf<Uri?>(null) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri -> if (uri != null) onExportBackup(uri) }
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri -> pendingImport = uri }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -317,6 +339,18 @@ private fun SettingsDialog(
                 ) {
                     Text(stringResource(R.string.settings_exit_home))
                 }
+                TextButton(
+                    onClick = { exportLauncher.launch(null) },
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text(stringResource(R.string.settings_export_backup))
+                }
+                TextButton(
+                    onClick = { importLauncher.launch(null) },
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text(stringResource(R.string.settings_import_backup))
+                }
             }
         },
         confirmButton = {
@@ -346,6 +380,45 @@ private fun SettingsDialog(
             onDismiss = { confirmExit = false }
         )
     }
+
+    pendingImport?.let { uri ->
+        ConfirmDialog(
+            title = stringResource(R.string.settings_import_backup),
+            text = stringResource(R.string.settings_import_confirm),
+            onConfirm = { onImportBackup(uri) },
+            onDismiss = { pendingImport = null }
+        )
+    }
+
+    backupResult?.let { result ->
+        BackupResultDialog(result = result, onDismiss = onClearBackupResult)
+    }
+}
+
+@Composable
+private fun BackupResultDialog(result: BackupResult, onDismiss: () -> Unit) {
+    val message = when (result) {
+        is BackupResult.Success -> stringResource(
+            R.string.backup_done,
+            result.categories,
+            result.dishes,
+            result.images
+        )
+        is BackupResult.Failure -> when (result.failure) {
+            BackupFailure.NotFound -> stringResource(R.string.backup_error_not_found)
+            BackupFailure.UnsupportedFormat -> stringResource(R.string.backup_error_format)
+            BackupFailure.Corrupt -> stringResource(R.string.backup_error_corrupt)
+            BackupFailure.Io -> stringResource(R.string.backup_error_io)
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.backup_result_title)) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.admin_confirm)) }
+        }
+    )
 }
 
 @Composable

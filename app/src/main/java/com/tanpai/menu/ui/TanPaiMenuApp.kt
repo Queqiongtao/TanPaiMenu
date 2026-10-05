@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tanpai.menu.R
+import com.tanpai.menu.backup.BackupManager
 import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.PinManager
 import com.tanpai.menu.data.SettingsStore
@@ -41,7 +42,8 @@ fun TanPaiMenuApp(
     repository: MenuRepository,
     settings: SettingsStore,
     pinManager: PinManager,
-    imageStore: ImageStore
+    imageStore: ImageStore,
+    backupManager: BackupManager
 ) {
     var screen by rememberSaveable { mutableStateOf(SCREEN_DISPLAY) }
     var pinDialog by remember { mutableStateOf(PinDialog.None) }
@@ -49,7 +51,7 @@ fun TanPaiMenuApp(
     val displayViewModel: DisplayViewModel =
         viewModel(factory = DisplayViewModel.factory(repository))
     val adminViewModel: AdminViewModel =
-        viewModel(factory = AdminViewModel.factory(repository, settings, imageStore))
+        viewModel(factory = AdminViewModel.factory(repository, settings, imageStore, backupManager))
 
     if (screen == SCREEN_ADMIN) {
         AdminScreen(viewModel = adminViewModel, onExit = { screen = SCREEN_DISPLAY })

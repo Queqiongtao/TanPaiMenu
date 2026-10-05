@@ -15,4 +15,7 @@ interface SaleRecordDao {
 
     @Query("UPDATE sale_record SET revoked = 1 WHERE id = :id")
     suspend fun markRevoked(id: Long)
+
+    @Query("DELETE FROM sale_record")
+    suspend fun deleteAll()
 }

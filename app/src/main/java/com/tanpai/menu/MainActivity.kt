@@ -25,7 +25,8 @@ class MainActivity : ComponentActivity() {
                         repository = container.menuRepository,
                         settings = container.settingsStore,
                         pinManager = container.pinManager,
-                        imageStore = container.imageStore
+                        imageStore = container.imageStore,
+                        backupManager = container.backupManager
                     )
                 }
             }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
+import java.util.Locale
 import java.util.UUID
 
 class ImageStore(private val context: Context) {
@@ -41,11 +42,23 @@ class ImageStore(private val context: Context) {
         File(context.filesDir, imagePath).delete()
     }
 
-    suspend fun deleteOrphans(referenced: Set<String>) = withContext(Dispatchers.IO) {
+    fun readBytes(relativePath: String): ByteArray? =
+        File(context.filesDir, relativePath).takeIf { it.isFile }?.readBytes()
+
+    fun writeImage(name: String, bytes: ByteArray): String? {
+        if (!IMAGE_NAME.matches(name)) return null
+        val target = File(imagesDir, name.lowercase(Locale.US))
+        target.outputStream().use { it.write(bytes) }
+        return "$IMAGES_DIR/${target.name}"
+    }
+
+    suspend fun deleteOrphans(referenced: Set<String>): Int = withContext(Dispatchers.IO) {
+        var removed = 0
         imagesDir.listFiles()?.forEach { file ->
-            if ("$IMAGES_DIR/${file.name}" !in referenced) file.delete()
+            if ("$IMAGES_DIR/${file.name}" !in referenced && file.delete()) removed++
         }
         captureDir.listFiles()?.forEach { it.delete() }
+        removed
     }
 
     private fun decodeScaled(input: InputStream): Bitmap? {
@@ -82,5 +95,7 @@ class ImageStore(private val context: Context) {
         private const val CAPTURE_DIR = "capture"
         private const val MAX_EDGE = 1280
         private const val JPEG_QUALITY = 80
+        private val IMAGE_NAME =
+            Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.(jpg|png)")
     }
 }

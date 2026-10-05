@@ -18,6 +18,11 @@ data class MenuSnapshot(
     val dishes: List<Dish> = emptyList()
 )
 
+data class FullMenu(
+    val categories: List<Category> = emptyList(),
+    val dishes: List<Dish> = emptyList()
+)
+
 class MenuRepository(
     private val db: TpDatabase,
     private val now: () -> Long = System::currentTimeMillis
@@ -37,6 +42,19 @@ class MenuRepository(
         appMetaDao.get(VERSION_KEY)?.value?.toLongOrNull() ?: 0L
 
     suspend fun allImagePaths(): Set<String> = dishDao.allImagePaths().toSet()
+
+    suspend fun exportAll(): FullMenu = FullMenu(categoryDao.getAll(), dishDao.getAll())
+
+    suspend fun replaceAll(categories: List<Category>, dishes: List<Dish>) {
+        db.withTransaction {
+            saleRecordDao.deleteAll()
+            dishDao.deleteAll()
+            categoryDao.deleteAll()
+            categories.forEach { categoryDao.insert(it) }
+            dishes.forEach { dishDao.insert(it) }
+            bumpVersion()
+        }
+    }
 
     suspend fun seedIfEmpty() {
         if (categoryDao.count() > 0) return

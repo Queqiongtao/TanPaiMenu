@@ -24,6 +24,9 @@ interface DishDao {
     @Query("SELECT imagePath FROM dish WHERE imagePath IS NOT NULL")
     suspend fun allImagePaths(): List<String>
 
+    @Query("SELECT * FROM dish ORDER BY sortOrder ASC, id ASC")
+    suspend fun getAll(): List<Dish>
+
     @Insert
     suspend fun insert(dish: Dish): Long
 
@@ -35,4 +38,7 @@ interface DishDao {
 
     @Query("UPDATE dish SET enabled = 0, updatedAt = :updatedAt WHERE id = :id")
     suspend fun softDelete(id: Long, updatedAt: Long)
+
+    @Query("DELETE FROM dish")
+    suspend fun deleteAll()
 }
