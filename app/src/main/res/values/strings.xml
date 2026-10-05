@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TanPaiMenu</string>
+    <string name="display_sold_out">已售完</string>
+    <string name="display_stock_remaining">余 %1$d</string>
+    <string name="display_no_dishes">该分类暂无菜品</string>
+    <string name="display_no_categories">暂无分类</string>
 </resources>
