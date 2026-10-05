@@ -64,6 +64,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 private val TopBarHeight = 44.dp
 /** 店名最大宽度，超长省略，避免挤占分类胶囊位置。 */
 private val StoreNameMaxWidth = 320.dp
+/** 店名最大宽度占顶栏宽的比例（居中后左右各占 20%）。 */
+private const val StoreNameWidthFraction = 0.4f
+/** 分类胶囊区最大宽度占顶栏宽的比例，与店名限宽之和不超过 100%。 */
+private const val ChipRowWidthFraction = 0.3f
 /** 分类胶囊之间的间距。 */
 private val ChipSpacing = 8.dp
 /** 长按店名进入管理的时长。 */
@@ -133,7 +137,8 @@ fun DisplayScreen(
 }
 
 /**
- * 顶部条：左侧店名（长按 2 秒进入管理），右侧分类胶囊（仅多分类时出现）。
+ * 顶部条：店名水平居中（长按 2 秒进入管理），分类胶囊靠右（仅多分类时出现）。
+ * 店名与胶囊分别限宽（0.4 / 0.3 顶栏宽），最大宽度之和不超过顶栏宽，保证不重叠。
  * 始终渲染，保证分类为空时管理入口仍可达。
  */
 @Composable
@@ -144,16 +149,17 @@ private fun DisplayTopBar(
     onSelect: (Long) -> Unit,
     onRequestAdmin: () -> Unit
 ) {
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(TopBarHeight),
-        verticalAlignment = Alignment.CenterVertically
+            .height(TopBarHeight)
     ) {
+        val storeNameMaxWidth = minOf(StoreNameMaxWidth, maxWidth * StoreNameWidthFraction)
         Text(
             text = storeName.ifBlank { stringResource(R.string.app_name) },
             modifier = Modifier
-                .widthIn(max = StoreNameMaxWidth)
+                .align(Alignment.Center)
+                .widthIn(max = storeNameMaxWidth)
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onPress = {
@@ -171,10 +177,12 @@ private fun DisplayTopBar(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier = Modifier.weight(1f))
         if (categories.size > 1) {
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .widthIn(max = maxWidth * ChipRowWidthFraction)
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(ChipSpacing),
                 verticalAlignment = Alignment.CenterVertically
             ) {
