@@ -223,52 +223,53 @@ private fun DishGrid(dishes: List<Dish>, showStockHint: Boolean) {
 
 @Composable
 fun DishCard(dish: Dish, showStockHint: Boolean = true, modifier: Modifier = Modifier) {
+    val contentAlpha = if (dish.soldOut) 0.45f else 1f
     Card(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.alpha(contentAlpha)) { DishThumbnail(dish) }
+            Spacer(modifier = Modifier.width(12.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .alpha(if (dish.soldOut) 0.45f else 1f)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                DishThumbnail(dish)
-                Spacer(modifier = Modifier.width(12.dp))
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = dish.name,
-                        modifier = Modifier.weight(1f, fill = false),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontFamily = ChineseFontFamily,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                Text(
+                    text = dish.name,
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .alpha(contentAlpha),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontFamily = ChineseFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "${PriceFormatter.formatYuan(dish.priceCents)} / ${dish.unit}",
+                    modifier = Modifier.alpha(contentAlpha),
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                    fontFamily = ChineseFontFamily,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+                if (dish.soldOut) {
                     Spacer(modifier = Modifier.width(8.dp))
+                    SoldOutBadge()
+                } else if (showStockHint) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    val status = stockStatus(dish)
                     Text(
-                        text = "${PriceFormatter.formatYuan(dish.priceCents)} / ${dish.unit}",
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                        text = status.text,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontFamily = ChineseFontFamily,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = status.color,
                         maxLines = 1
                     )
-                    if (showStockHint) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        val status = stockStatus(dish)
-                        Text(
-                            text = status.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = ChineseFontFamily,
-                            color = status.color,
-                            maxLines = 1
-                        )
-                    }
                 }
-            }
-            if (dish.soldOut) {
-                SoldOutStamp(modifier = Modifier.align(Alignment.Center))
             }
         }
     }
@@ -276,11 +277,6 @@ fun DishCard(dish: Dish, showStockHint: Boolean = true, modifier: Modifier = Mod
 
 @Composable
 private fun stockStatus(dish: Dish): StockStatus = when {
-    dish.soldOut -> StockStatus(
-        text = stringResource(R.string.display_sold_out),
-        color = MaterialTheme.colorScheme.error
-    )
-
     dish.stockEnabled -> StockStatus(
         text = stringResource(R.string.display_stock_remaining, dish.stockCount),
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -325,8 +321,9 @@ private fun DishThumbnail(dish: Dish) {
     }
 }
 
+/** 售完徽标：置于卡片行尾，不覆盖菜名与价格。 */
 @Composable
-private fun SoldOutStamp(modifier: Modifier = Modifier) {
+private fun SoldOutBadge(modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.error,
@@ -334,10 +331,11 @@ private fun SoldOutStamp(modifier: Modifier = Modifier) {
     ) {
         Text(
             text = stringResource(R.string.display_sold_out),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.bodyMedium,
             fontFamily = ChineseFontFamily,
-            color = MaterialTheme.colorScheme.onError
+            color = MaterialTheme.colorScheme.onError,
+            maxLines = 1
         )
     }
 }
