@@ -56,6 +56,7 @@ import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.kiosk.KeepScreenOn
 import com.tanpai.menu.ui.theme.ChineseFontFamily
+import com.tanpai.menu.ui.theme.StatusColors
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -298,8 +299,8 @@ private fun stockStatus(dish: Dish): StockStatus = when {
 
     else -> StockStatus(
         text = stringResource(R.string.display_in_stock),
-        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+        containerColor = StatusColors.InStockContainer,
+        contentColor = StatusColors.InStockContent
     )
 }
 
