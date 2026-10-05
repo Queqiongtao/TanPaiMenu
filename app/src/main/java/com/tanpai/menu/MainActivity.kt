@@ -10,23 +10,22 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.tanpai.menu.ui.display.DisplayScreen
-import com.tanpai.menu.ui.display.DisplayViewModel
+import com.tanpai.menu.ui.TanPaiMenuApp
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         hideSystemBars()
-        val repository = (application as App).container.menuRepository
+        val container = (application as App).container
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    val viewModel: DisplayViewModel = viewModel(
-                        factory = DisplayViewModel.factory(repository)
+                    TanPaiMenuApp(
+                        repository = container.menuRepository,
+                        settings = container.settingsStore,
+                        pinManager = container.pinManager
                     )
-                    DisplayScreen(viewModel = viewModel)
                 }
             }
         }

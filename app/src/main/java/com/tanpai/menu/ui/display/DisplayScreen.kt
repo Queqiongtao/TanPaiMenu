@@ -2,6 +2,7 @@ package com.tanpai.menu.ui.display
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,9 +51,15 @@ import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.PriceFormatter
 import java.io.File
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
-fun DisplayScreen(viewModel: DisplayViewModel, modifier: Modifier = Modifier) {
+fun DisplayScreen(
+    viewModel: DisplayViewModel,
+    storeName: String,
+    onRequestAdmin: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val menu by viewModel.menu.collectAsState()
     val categories = menu.categories
     var selectedCategoryId by rememberSaveable { mutableLongStateOf(0L) }
@@ -71,6 +79,8 @@ fun DisplayScreen(viewModel: DisplayViewModel, modifier: Modifier = Modifier) {
             categories = categories,
             selectedCategoryId = selectedCategoryId,
             onSelect = { selectedCategoryId = it },
+            storeName = storeName,
+            onRequestAdmin = onRequestAdmin,
             modifier = Modifier
                 .width(240.dp)
                 .fillMaxHeight()
@@ -94,36 +104,64 @@ private fun CategorySidebar(
     categories: List<Category>,
     selectedCategoryId: Long,
     onSelect: (Long) -> Unit,
+    storeName: String,
+    onRequestAdmin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(categories, key = { it.id }) { category ->
-                val selected = category.id == selectedCategoryId
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                        .clickable { onSelect(category.id) },
-                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = category.name,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
+        Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                val released = withTimeoutOrNull(5_000L) { awaitRelease() }
+                                if (released == null) onRequestAdmin()
+                            }
+                        )
+                    }
+                    .padding(horizontal = 16.dp, vertical = 20.dp)
+            ) {
+                Text(
+                    text = storeName.ifBlank { stringResource(R.string.app_name) },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.display_long_press_hint),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(categories, key = { it.id }) { category ->
+                    val selected = category.id == selectedCategoryId
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                            .clickable { onSelect(category.id) },
+                        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = category.name,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
             }
         }
