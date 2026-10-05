@@ -9,6 +9,9 @@
 完整的开发计划、架构与接口契约、测试计划见 [docs/PLAN.md](docs/PLAN.md)。
 设备实测基线见 [docs/device-baseline.md](docs/device-baseline.md)。
 
+架构与关键逻辑见 [docs/architecture.md](docs/architecture.md)。
+功能设计文档见 [docs/design/README.md](docs/design/README.md)。
+
 > 进度：**Phase 0 已完成**（工具链就绪 + 真机预检 + Hello World 装机验证）。
 
 ## 快速开始（Phase 0：工具链与真机预检）
