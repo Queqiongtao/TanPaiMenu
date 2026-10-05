@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android / IDE
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.cxx/
+.externalNativeBuild/
+.idea/
+*.iml
+.DS_Store
+
+# Toolchain kept inside the workspace (see scripts/setup-toolchain.ps1)
+.toolchain/
