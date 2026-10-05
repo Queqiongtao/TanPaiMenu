@@ -21,8 +21,9 @@ app/src/main/java/com/tanpai/menu/
 ├─ client/      # 客户端侧：发现、连接、镜像状态、重连
 ├─ net/protocol/ # 契约 DTO、ISO-8601、实体 ↔ DTO 映射（主机与客户端共用）
 ├─ net/         # REST 客户端、WS 客户端（Phase 3）
-├─ ui/display/  # 顾客展示页
+├─ ui/display/  # 顾客展示页（2 列 × 6 行横卡；内置字体见 ui/theme）
 ├─ ui/admin/    # 管理与设置页（双端共用）
+├─ ui/theme/    # 字体（Noto Sans SC Bold）与字型定义
 ├─ ui/client/   # 手机客户端管理页（复用 admin 组件）
 ├─ imaging/     # 压缩、存储、加载
 ├─ backup/      # 备份格式（format 1）与导出 / 导入
@@ -37,6 +38,7 @@ Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`�
 ## 3. 关键流程与数据流
 
 - 展示：`data` 读 Room → `ui/display` 渲染；沽清卡片灰化并盖已售完章。
+- 展示布局：侧栏 150dp + `GridCells.Fixed(2)` 横卡（左 56dp 方图 + 菜名/价格/有货一行）；行高按可用高度计算，12 道一屏、超出滚动。字体 `ui/theme/Type.kt`（Noto Sans SC Bold，OFL 1.1，见 `docs/third-party/`）。
 - 卖出：`ui/admin` 命令（乐观更新）→ REST → `host` 单写者队列 → 事务（写 `SaleRecord` + 扣库存 + 全局 `version` +1）→ WS 广播 → 各端应用。
 - 同步：客户端 `/state` 全量对齐 + WS 事件增量；用 `version` 判新旧；断线重连重取快照。
 - 配对：主机生成 token → 二维码 / NSD / 手输 → 客户端带 token 请求。
@@ -76,6 +78,7 @@ Phase 1 已实现的单机流程（含实现位置）：
 
 - 构建运维：Gradle wrapper + `scripts/*.ps1`（`.bat` 为入口封装）；不手工修改生成物。
 - v1：debug 签名 APK、单 ABI（arm64-v8a）、关闭 minify；分发与排障见 `docs/design/0005-发布分发与现场排障.md`。
+- 内置字体 Noto Sans SC Bold 约 8.5MB，APK 体积约 20MB；如需瘦身可改子集化，但会限制自定义店名/菜名的字形。
 - 性能门禁见 `docs/PLAN.md` 第 8 节。
 
 ## 8. 变更记录
@@ -87,3 +90,5 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-05 | 回填 Phase 1 实现位置：图片、备份、日志、门禁与单机流程 | 0001、0003、0004、0005 |
 | 2026-10-05 | Phase 2 启动：新增 `net/protocol` 契约层与主机写管线说明 | 0002 |
 | 2026-10-05 | M6 落地：契约层与单写者事件流实现，附验证结果 | 0002 |
+| 2026-10-05 | 展示页紧凑化与默认菜单改写；新增内置字体与 `ui/theme` | 0006 |
+| 2026-10-05 | 展示页修订验证收尾：设置弹窗内容可滚动，末尾项在 553dp 横屏可达 | 0006 |

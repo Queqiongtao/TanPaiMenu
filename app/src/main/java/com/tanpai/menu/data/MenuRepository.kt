@@ -76,13 +76,26 @@ class MenuRepository(
         if (categoryDao.count() > 0) return
         mutate<Unit> {
             if (categoryDao.count() > 0) return@mutate Unit to null
-            SeedMenu.categories.forEach { seed ->
-                val categoryId = categoryDao.insert(seed.category.copy(updatedAt = now()))
-                seed.dishes.forEach { dish ->
-                    dishDao.insert(dish.copy(categoryId = categoryId, updatedAt = now()))
-                }
-            }
+            insertSeed()
             Unit to MenuChange.FullReload(bumpVersion())
+        }
+    }
+
+    /** 清空菜单并写回默认菜单（设置页「恢复默认菜单」）。图片清理由调用方负责。 */
+    suspend fun resetToSeedMenu(): Unit = mutate<Unit> {
+        saleRecordDao.deleteAll()
+        dishDao.deleteAll()
+        categoryDao.deleteAll()
+        insertSeed()
+        Unit to MenuChange.FullReload(bumpVersion())
+    }
+
+    private suspend fun insertSeed() {
+        SeedMenu.categories.forEach { seed ->
+            val categoryId = categoryDao.insert(seed.category.copy(updatedAt = now()))
+            seed.dishes.forEach { dish ->
+                dishDao.insert(dish.copy(categoryId = categoryId, updatedAt = now()))
+            }
         }
     }
 

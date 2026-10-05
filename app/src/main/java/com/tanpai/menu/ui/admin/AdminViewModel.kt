@@ -15,6 +15,7 @@ import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.SellResult
 import com.tanpai.menu.imaging.ImageStore
+import com.tanpai.menu.logging.TpLog
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,10 +32,13 @@ class AdminViewModel(
 
     val deviceId: String = settings.deviceId
 
-    var storeName by mutableStateOf(settings.storeName)
+    var storeName by mutableStateOf(settings.displayStoreName)
         private set
 
     var autostartEnabled by mutableStateOf(settings.autostartEnabled)
+        private set
+
+    var showStockHint by mutableStateOf(settings.showStockHint)
         private set
 
     val menu: StateFlow<MenuSnapshot> = repository.observeMenu()
@@ -42,6 +46,9 @@ class AdminViewModel(
 
     private val _backupResult = MutableStateFlow<BackupResult?>(null)
     val backupResult: StateFlow<BackupResult?> = _backupResult.asStateFlow()
+
+    private val _resetDone = MutableStateFlow(false)
+    val resetDone: StateFlow<Boolean> = _resetDone.asStateFlow()
 
     fun updateStoreName(value: String) {
         storeName = value
@@ -51,6 +58,30 @@ class AdminViewModel(
     fun updateAutostart(value: Boolean) {
         autostartEnabled = value
         settings.autostartEnabled = value
+    }
+
+    fun updateShowStockHint(value: Boolean) {
+        showStockHint = value
+        settings.showStockHint = value
+    }
+
+    /** 清空菜单与图片并写回默认菜单，用于「恢复默认菜单」。 */
+    fun resetToDefaultMenu() {
+        viewModelScope.launch {
+            runCatching {
+                repository.resetToSeedMenu()
+                imageStore.deleteOrphans(emptySet())
+            }.onSuccess {
+                _resetDone.value = true
+                TpLog.i(TAG, "已恢复默认菜单")
+            }.onFailure {
+                TpLog.e(TAG, "恢复默认菜单失败", it)
+            }
+        }
+    }
+
+    fun clearResetDone() {
+        _resetDone.value = false
     }
 
     fun createCaptureUri(): Uri = imageStore.newCaptureUri()
@@ -111,6 +142,8 @@ class AdminViewModel(
     }
 
     companion object {
+        private const val TAG = "admin"
+
         fun factory(
             repository: MenuRepository,
             settings: SettingsStore,

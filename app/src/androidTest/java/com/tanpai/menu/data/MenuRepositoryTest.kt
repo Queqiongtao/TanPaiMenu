@@ -49,7 +49,8 @@ class MenuRepositoryTest {
     fun seedInsertsSampleMenuOnlyOnce() = runTest {
         repository.seedIfEmpty()
         repository.seedIfEmpty()
-        assertEquals(2, db.categoryDao().getAll().size)
+        assertEquals(1, db.categoryDao().getAll().size)
+        assertEquals(12, db.dishDao().getAll().size)
     }
 
     @Test
@@ -148,6 +149,21 @@ class MenuRepositoryTest {
         assertEquals(10, db.saleRecordDao().count())
     }
 
+    @Test
+    fun resetToSeedMenuReplacesMenuAndBumpsVersion() = runTest {
+        val categoryId = repository.createCategory("旧分类", 1)
+        repository.createDish(newDish().copy(categoryId = categoryId))
+        val before = repository.currentVersion()
+
+        repository.resetToSeedMenu()
+
+        val menu = repository.exportAll()
+        assertEquals(1, menu.categories.size)
+        assertEquals("馄饨", menu.categories.single().name)
+        assertEquals(12, menu.dishes.size)
+        assertTrue(menu.dishes.none { it.stockEnabled })
+        assertEquals(before + 1, repository.currentVersion())
+    }
     private suspend fun newDishInNewCategory(stockCount: Int = 5): Long {
         val categoryId = repository.createCategory("热菜", 1)
         return repository.createDish(newDish(stockCount).copy(categoryId = categoryId))

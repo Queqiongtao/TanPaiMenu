@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,6 +59,7 @@ import com.tanpai.menu.kiosk.openHomeSettings
 fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
     val menu by viewModel.menu.collectAsState()
     val backupResult by viewModel.backupResult.collectAsState()
+    val resetDone by viewModel.resetDone.collectAsState()
     var selectedCategoryId by rememberSaveable { mutableLongStateOf(0L) }
 
     LaunchedEffect(menu.categories) {
@@ -270,8 +273,13 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
         SettingsDialog(
             storeName = viewModel.storeName,
             autostart = viewModel.autostartEnabled,
+            showStockHint = viewModel.showStockHint,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAutostartChange = { viewModel.updateAutostart(it) },
+            onShowStockHintChange = { viewModel.updateShowStockHint(it) },
+            resetDone = resetDone,
+            onResetSeed = { viewModel.resetToDefaultMenu() },
+            onClearResetDone = { viewModel.clearResetDone() },
             backupResult = backupResult,
             onExportBackup = { viewModel.exportBackup(it) },
             onImportBackup = { viewModel.importBackup(it) },
@@ -285,8 +293,13 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
 private fun SettingsDialog(
     storeName: String,
     autostart: Boolean,
+    showStockHint: Boolean,
     onStoreNameChange: (String) -> Unit,
     onAutostartChange: (Boolean) -> Unit,
+    onShowStockHintChange: (Boolean) -> Unit,
+    resetDone: Boolean,
+    onResetSeed: () -> Unit,
+    onClearResetDone: () -> Unit,
     backupResult: BackupResult?,
     onExportBackup: (Uri) -> Unit,
     onImportBackup: (Uri) -> Unit,
@@ -296,7 +309,9 @@ private fun SettingsDialog(
     val context = LocalContext.current
     var name by remember { mutableStateOf(storeName) }
     var auto by remember { mutableStateOf(autostart) }
+    var showStock by remember { mutableStateOf(showStockHint) }
     var confirmExit by remember { mutableStateOf(false) }
+    var confirmReset by remember { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<Uri?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -310,7 +325,7 @@ private fun SettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_title)) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -326,6 +341,16 @@ private fun SettingsDialog(
                 ) {
                     Text(stringResource(R.string.settings_autostart))
                     Switch(checked = auto, onCheckedChange = { auto = it })
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(stringResource(R.string.settings_show_stock_hint))
+                    Switch(checked = showStock, onCheckedChange = { showStock = it })
                 }
                 TextButton(
                     onClick = { openHomeSettings(context) },
@@ -351,6 +376,12 @@ private fun SettingsDialog(
                 ) {
                     Text(stringResource(R.string.settings_import_backup))
                 }
+                TextButton(
+                    onClick = { confirmReset = true },
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text(stringResource(R.string.settings_reset_seed))
+                }
             }
         },
         confirmButton = {
@@ -358,6 +389,7 @@ private fun SettingsDialog(
                 onClick = {
                     onStoreNameChange(name.trim())
                     onAutostartChange(auto)
+                    onShowStockHintChange(showStock)
                     onDismiss()
                 }
             ) { Text(stringResource(R.string.admin_confirm)) }
@@ -374,6 +406,7 @@ private fun SettingsDialog(
             onConfirm = {
                 onStoreNameChange(name.trim())
                 onAutostartChange(auto)
+                onShowStockHintChange(showStock)
                 exitToHome(context)
                 onDismiss()
             },
@@ -387,6 +420,27 @@ private fun SettingsDialog(
             text = stringResource(R.string.settings_import_confirm),
             onConfirm = { onImportBackup(uri) },
             onDismiss = { pendingImport = null }
+        )
+    }
+
+    if (confirmReset) {
+        ConfirmDialog(
+            title = stringResource(R.string.settings_reset_seed),
+            text = stringResource(R.string.settings_reset_seed_confirm),
+            onConfirm = {
+                confirmReset = false
+                onResetSeed()
+            },
+            onDismiss = { confirmReset = false }
+        )
+    }
+
+    if (resetDone) {
+        ConfirmDialog(
+            title = stringResource(R.string.settings_reset_seed),
+            text = stringResource(R.string.settings_reset_seed_done),
+            onConfirm = onClearResetDone,
+            onDismiss = onClearResetDone
         )
     }
 
@@ -440,6 +494,8 @@ private fun DishRow(
         }
         if (dish.soldOut) {
             parts += stringResource(R.string.display_sold_out)
+        } else if (!dish.stockEnabled) {
+            parts += stringResource(R.string.display_in_stock)
         }
         val details = parts.joinToString(separator = "    ")
         Row(
@@ -454,11 +510,13 @@ private fun DishRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Button(onClick = onSell, enabled = !dish.soldOut) {
-                Text(stringResource(R.string.admin_sell))
-            }
-            TextButton(onClick = onUnsell) {
-                Text(stringResource(R.string.admin_unsell))
+            if (dish.stockEnabled) {
+                Button(onClick = onSell, enabled = !dish.soldOut) {
+                    Text(stringResource(R.string.admin_sell))
+                }
+                TextButton(onClick = onUnsell) {
+                    Text(stringResource(R.string.admin_unsell))
+                }
             }
             TextButton(onClick = { onSoldOutChange(!dish.soldOut) }) {
                 Text(

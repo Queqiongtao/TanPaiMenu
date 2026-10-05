@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -36,28 +38,40 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.tanpai.menu.R
 import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.kiosk.KeepScreenOn
+import com.tanpai.menu.ui.theme.ChineseFontFamily
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
+
+/** 侧栏宽度：只放店名与分类，把宽度让给菜品区。 */
+private val SidebarWidth = 150.dp
+
+private val ContentPadding = 12.dp
+private val CardSpacing = 10.dp
+private val CardMaxHeight = 96.dp
+private val CardMinHeight = 72.dp
+private val ThumbnailSize = 56.dp
 
 @Composable
 fun DisplayScreen(
     viewModel: DisplayViewModel,
     storeName: String,
+    showStockHint: Boolean,
     onRequestAdmin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -84,18 +98,18 @@ fun DisplayScreen(
             storeName = storeName,
             onRequestAdmin = onRequestAdmin,
             modifier = Modifier
-                .width(240.dp)
+                .width(SidebarWidth)
                 .fillMaxHeight()
         )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(ContentPadding)
         ) {
             when {
                 categories.isEmpty() -> CenterHint(stringResource(R.string.display_no_categories))
                 dishes.isEmpty() -> CenterHint(stringResource(R.string.display_no_dishes))
-                else -> DishGrid(dishes)
+                else -> DishGrid(dishes = dishes, showStockHint = showStockHint)
             }
         }
     }
@@ -123,40 +137,48 @@ private fun CategorySidebar(
                             }
                         )
                     }
-                    .padding(horizontal = 16.dp, vertical = 20.dp)
+                    .padding(horizontal = 12.dp, vertical = 16.dp)
             ) {
                 Text(
                     text = storeName.ifBlank { stringResource(R.string.app_name) },
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = 26.sp,
+                        lineHeight = 32.sp
+                    ),
+                    fontFamily = ChineseFontFamily,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = stringResource(R.string.display_long_press_hint),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(categories, key = { it.id }) { category ->
                     val selected = category.id == selectedCategoryId
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
+                            .padding(horizontal = 8.dp)
                             .clickable { onSelect(category.id) },
                         color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
                             text = category.name,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            fontFamily = ChineseFontFamily,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                             color = if (selected) {
                                 MaterialTheme.colorScheme.onPrimary
                             } else {
@@ -170,50 +192,77 @@ private fun CategorySidebar(
     }
 }
 
+/**
+ * 2 列网格；行高按可用高度摊平，使 12 道菜正好铺满一屏，超过 12 道则滚动。
+ * 行高限制在 [CardMinHeight] 与 [CardMaxHeight] 之间，避免菜品少时被拉得过大。
+ */
 @Composable
-private fun DishGrid(dishes: List<Dish>) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 260.dp),
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(bottom = 24.dp)
-    ) {
-        items(dishes, key = { it.id }) { dish ->
-            DishCard(dish = dish)
+private fun DishGrid(dishes: List<Dish>, showStockHint: Boolean) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val rows = ((dishes.size + 1) / 2).coerceAtLeast(1)
+        val rowHeight = ((maxHeight - CardSpacing * (rows - 1)) / rows)
+            .coerceIn(CardMinHeight, CardMaxHeight)
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(CardSpacing),
+            verticalArrangement = Arrangement.spacedBy(CardSpacing),
+            contentPadding = PaddingValues(bottom = 4.dp)
+        ) {
+            items(dishes, key = { it.id }) { dish ->
+                DishCard(
+                    dish = dish,
+                    showStockHint = showStockHint,
+                    modifier = Modifier.height(rowHeight)
+                )
+            }
         }
     }
 }
 
 @Composable
-fun DishCard(dish: Dish, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Column(
+fun DishCard(dish: Dish, showStockHint: Boolean = true, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .alpha(if (dish.soldOut) 0.45f else 1f)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                DishImage(dish)
-                Column(modifier = Modifier.padding(16.dp)) {
+                DishThumbnail(dish)
+                Spacer(modifier = Modifier.width(12.dp))
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         text = dish.name,
-                        style = MaterialTheme.typography.headlineSmall,
-                        maxLines = 2,
+                        modifier = Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontFamily = ChineseFontFamily,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "${PriceFormatter.formatYuan(dish.priceCents)} / ${dish.unit}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                        fontFamily = ChineseFontFamily,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
                     )
-                    if (dish.stockEnabled) {
-                        Spacer(modifier = Modifier.height(6.dp))
+                    if (showStockHint) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        val status = stockStatus(dish)
                         Text(
-                            text = stringResource(R.string.display_stock_remaining, dish.stockCount),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = status.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = ChineseFontFamily,
+                            color = status.color,
+                            maxLines = 1
                         )
                     }
                 }
@@ -226,7 +275,27 @@ fun DishCard(dish: Dish, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun DishImage(dish: Dish) {
+private fun stockStatus(dish: Dish): StockStatus = when {
+    dish.soldOut -> StockStatus(
+        text = stringResource(R.string.display_sold_out),
+        color = MaterialTheme.colorScheme.error
+    )
+
+    dish.stockEnabled -> StockStatus(
+        text = stringResource(R.string.display_stock_remaining, dish.stockCount),
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    else -> StockStatus(
+        text = stringResource(R.string.display_in_stock),
+        color = MaterialTheme.colorScheme.tertiary
+    )
+}
+
+private data class StockStatus(val text: String, val color: Color)
+
+@Composable
+private fun DishThumbnail(dish: Dish) {
     val context = LocalContext.current
     val file = dish.imagePath?.let { File(context.filesDir, it) }
     if (file != null && file.exists()) {
@@ -234,21 +303,22 @@ private fun DishImage(dish: Dish) {
             model = file,
             contentDescription = dish.name,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp),
+                .size(ThumbnailSize)
+                .clip(RoundedCornerShape(12.dp)),
             contentScale = ContentScale.Crop
         )
     } else {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
+                .size(ThumbnailSize)
+                .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.secondaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = dish.name.take(1),
-                style = MaterialTheme.typography.displayMedium,
+                style = MaterialTheme.typography.titleLarge,
+                fontFamily = ChineseFontFamily,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
         }
@@ -264,9 +334,9 @@ private fun SoldOutStamp(modifier: Modifier = Modifier) {
     ) {
         Text(
             text = stringResource(R.string.display_sold_out),
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            fontFamily = ChineseFontFamily,
             color = MaterialTheme.colorScheme.onError
         )
     }
@@ -283,7 +353,7 @@ private fun CenterHint(text: String) {
     }
 }
 
-@Preview(showBackground = true, widthDp = 320)
+@Preview(showBackground = true, widthDp = 800, heightDp = 200)
 @Composable
 private fun DishCardPreview() {
     MaterialTheme {
@@ -291,11 +361,30 @@ private fun DishCardPreview() {
             dish = Dish(
                 id = 1L,
                 categoryId = 1L,
-                name = "烤串",
-                priceCents = 300,
-                unit = "串",
+                name = "芝士玉米鲜肉",
+                priceCents = 1400,
+                unit = "份",
+                stockEnabled = false,
+                updatedAt = 0L
+            )
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 800, heightDp = 200)
+@Composable
+private fun SoldOutDishCardPreview() {
+    MaterialTheme {
+        DishCard(
+            dish = Dish(
+                id = 2L,
+                categoryId = 1L,
+                name = "全家福",
+                priceCents = 2000,
+                unit = "份",
                 stockEnabled = true,
-                stockCount = 18,
+                stockCount = 0,
+                soldOut = true,
                 updatedAt = 0L
             )
         )

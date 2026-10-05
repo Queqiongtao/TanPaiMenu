@@ -58,7 +58,8 @@ fun TanPaiMenuApp(
     } else {
         DisplayScreen(
             viewModel = displayViewModel,
-            storeName = settings.storeName,
+            storeName = settings.displayStoreName,
+            showStockHint = settings.showStockHint,
             onRequestAdmin = {
                 pinDialog = if (pinManager.isPinSet()) PinDialog.Enter else PinDialog.Setup
             }
