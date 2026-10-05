@@ -21,6 +21,9 @@ interface DishDao {
     @Query("SELECT COUNT(*) FROM dish WHERE categoryId = :categoryId AND enabled = 1")
     suspend fun countEnabledInCategory(categoryId: Long): Int
 
+    @Query("SELECT id FROM dish WHERE categoryId = :categoryId AND enabled = 1")
+    suspend fun idsEnabledInCategory(categoryId: Long): List<Long>
+
     @Query("SELECT imagePath FROM dish WHERE imagePath IS NOT NULL")
     suspend fun allImagePaths(): List<String>
 

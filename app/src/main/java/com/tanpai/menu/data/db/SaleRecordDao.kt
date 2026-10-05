@@ -10,6 +10,9 @@ interface SaleRecordDao {
     @Query("SELECT * FROM sale_record WHERE dishId = :dishId AND deviceId = :deviceId AND revoked = 0 ORDER BY id DESC")
     suspend fun getActiveFor(dishId: Long, deviceId: String): List<SaleRecord>
 
+    @Query("SELECT COUNT(*) FROM sale_record")
+    suspend fun count(): Int
+
     @Insert
     suspend fun insert(record: SaleRecord): Long
 

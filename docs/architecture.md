@@ -19,7 +19,8 @@ app/src/main/java/com/tanpai/menu/
 ├─ domain/      # 纯业务规则（卖出 / 撤销策略、价格格式化）
 ├─ host/        # 主机侧：NanoHTTPD REST/WS、单写者队列、配对与鉴权
 ├─ client/      # 客户端侧：发现、连接、镜像状态、重连
-├─ net/         # REST 客户端、WS 客户端、DTO 与序列化
+├─ net/protocol/ # 契约 DTO、ISO-8601、实体 ↔ DTO 映射（主机与客户端共用）
+├─ net/         # REST 客户端、WS 客户端（Phase 3）
 ├─ ui/display/  # 顾客展示页
 ├─ ui/admin/    # 管理与设置页（双端共用）
 ├─ ui/client/   # 手机客户端管理页（复用 admin 组件）
@@ -31,7 +32,7 @@ app/src/main/java/com/tanpai/menu/
 
 模块边界：`host` 与 `client` 不互相引用；跨模块只经 `net` / `data` 的接口与 DTO 交互。
 
-Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；`host`、`client`、`net`、`ui/client` 为 Phase 2 / 3 预留。
+Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 新增 `net/protocol`、`host`（进行中）；`net`（客户端）、`client`、`ui/client` 为 Phase 3 预留。
 
 ## 3. 关键流程与数据流
 
@@ -39,6 +40,11 @@ Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`�
 - 卖出：`ui/admin` 命令（乐观更新）→ REST → `host` 单写者队列 → 事务（写 `SaleRecord` + 扣库存 + 全局 `version` +1）→ WS 广播 → 各端应用。
 - 同步：客户端 `/state` 全量对齐 + WS 事件增量；用 `version` 判新旧；断线重连重取快照。
 - 配对：主机生成 token → 二维码 / NSD / 手输 → 客户端带 token 请求。
+
+Phase 2 主机写管线（M6 起实现）：客户端 / 本机命令 → `host` 路由与鉴权 → `net/protocol` 解析 → `MenuRepository` 单写者锁 → 事务提交 → `MenuChange` 事件 → WS 广播。
+
+实现位置：`data/MenuRepository.kt`（`writeMutex` 串行化 + `events` 事件流，提交后按序发出）、`data/MenuChange.kt`（变更类型）、`net/protocol/Contract.kt`（DTO / ISO-8601 / 实体映射）。
+验证：JVM 单测 36 项通过（含 `ContractTest` 12 项）；真机 Teclast T10 / API 24 仪表测试 11 项通过。
 
 Phase 1 已实现的单机流程（含实现位置）：
 
@@ -79,3 +85,5 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-05 | 建立架构文档骨架 | — |
 | 2026-10-05 | 填充分层与模块、关键流程、错误与日志、数据迁移、构建与发布 | 0001、0002、0005 |
 | 2026-10-05 | 回填 Phase 1 实现位置：图片、备份、日志、门禁与单机流程 | 0001、0003、0004、0005 |
+| 2026-10-05 | Phase 2 启动：新增 `net/protocol` 契约层与主机写管线说明 | 0002 |
+| 2026-10-05 | M6 落地：契约层与单写者事件流实现，附验证结果 | 0002 |
