@@ -23,6 +23,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -53,6 +54,7 @@ import com.tanpai.menu.domain.SellError
 import com.tanpai.menu.domain.SellResult
 import com.tanpai.menu.kiosk.exitToHome
 import com.tanpai.menu.kiosk.openHomeSettings
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -274,9 +276,11 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             storeName = viewModel.storeName,
             autostart = viewModel.autostartEnabled,
             showStockHint = viewModel.showStockHint,
+            cardAlphaPercent = viewModel.cardAlphaPercent,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAutostartChange = { viewModel.updateAutostart(it) },
             onShowStockHintChange = { viewModel.updateShowStockHint(it) },
+            onCardAlphaChange = { viewModel.updateCardAlphaPercent(it) },
             resetDone = resetDone,
             onResetSeed = { viewModel.resetToDefaultMenu() },
             onClearResetDone = { viewModel.clearResetDone() },
@@ -294,9 +298,11 @@ private fun SettingsDialog(
     storeName: String,
     autostart: Boolean,
     showStockHint: Boolean,
+    cardAlphaPercent: Int,
     onStoreNameChange: (String) -> Unit,
     onAutostartChange: (Boolean) -> Unit,
     onShowStockHintChange: (Boolean) -> Unit,
+    onCardAlphaChange: (Int) -> Unit,
     resetDone: Boolean,
     onResetSeed: () -> Unit,
     onClearResetDone: () -> Unit,
@@ -310,6 +316,7 @@ private fun SettingsDialog(
     var name by remember { mutableStateOf(storeName) }
     var auto by remember { mutableStateOf(autostart) }
     var showStock by remember { mutableStateOf(showStockHint) }
+    var cardAlpha by remember { mutableStateOf(cardAlphaPercent / 100f) }
     var confirmExit by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<Uri?>(null) }
@@ -352,6 +359,23 @@ private fun SettingsDialog(
                     Text(stringResource(R.string.settings_show_stock_hint))
                     Switch(checked = showStock, onCheckedChange = { showStock = it })
                 }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(stringResource(R.string.settings_card_alpha))
+                    Text(text = (cardAlpha * 100).roundToInt().toString() + "%")
+                }
+                Slider(
+                    value = cardAlpha,
+                    onValueChange = { cardAlpha = it },
+                    onValueChangeFinished = { onCardAlphaChange((cardAlpha * 100).roundToInt()) },
+                    valueRange = 0.2f..1f,
+                    steps = 15
+                )
                 TextButton(
                     onClick = { openHomeSettings(context) },
                     modifier = Modifier.padding(top = 8.dp)

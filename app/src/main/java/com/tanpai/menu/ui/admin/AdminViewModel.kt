@@ -41,6 +41,9 @@ class AdminViewModel(
     var showStockHint by mutableStateOf(settings.showStockHint)
         private set
 
+    var cardAlphaPercent by mutableStateOf(settings.cardAlphaPercent)
+        private set
+
     val menu: StateFlow<MenuSnapshot> = repository.observeMenu()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MenuSnapshot())
 
@@ -63,6 +66,11 @@ class AdminViewModel(
     fun updateShowStockHint(value: Boolean) {
         showStockHint = value
         settings.showStockHint = value
+    }
+
+    fun updateCardAlphaPercent(value: Int) {
+        cardAlphaPercent = value
+        settings.cardAlphaPercent = value
     }
 
     /** 清空菜单与图片并写回默认菜单，用于「恢复默认菜单」。 */

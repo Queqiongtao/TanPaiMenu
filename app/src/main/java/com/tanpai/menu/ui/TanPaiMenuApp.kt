@@ -60,6 +60,7 @@ fun TanPaiMenuApp(
             viewModel = displayViewModel,
             storeName = settings.displayStoreName,
             showStockHint = settings.showStockHint,
+            cardAlpha = settings.cardAlphaPercent / 100f,
             onRequestAdmin = {
                 pinDialog = if (pinManager.isPinSet()) PinDialog.Enter else PinDialog.Setup
             }

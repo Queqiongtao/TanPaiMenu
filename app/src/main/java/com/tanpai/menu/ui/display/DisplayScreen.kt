@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -74,13 +75,18 @@ private val ChipSpacing = 8.dp
 private const val AdminLongPressMillis = 2_000L
 
 private val ContentPadding = 12.dp
-private val CardSpacing = 10.dp
-private val CardMaxHeight = 96.dp
-private val CardMinHeight = 72.dp
+/** 卡片固定高度：56dp 缩略图 + 上下各 6dp 内边距。 */
+private val CardHeight = 68.dp
+/** 卡片行距（行高变矮后放大行距，让 12 道仍铺满一屏）。 */
+private val CardSpacing = 16.dp
+/** 网格底部留白。 */
+private val GridBottomPadding = 24.dp
 private val ThumbnailSize = 56.dp
 
 /** 卡片内横向内边距。 */
 private val CardHorizontalPadding = 10.dp
+/** 卡片内纵向内边距，与 56dp 缩略图共同决定卡片高度。 */
+private val CardVerticalPadding = 6.dp
 /** 缩略图与文字之间的间距。 */
 private val ThumbnailGap = 8.dp
 /** 菜名 / 价格 / 状态三列之间的间距。 */
@@ -95,6 +101,7 @@ fun DisplayScreen(
     viewModel: DisplayViewModel,
     storeName: String,
     showStockHint: Boolean,
+    cardAlpha: Float = 1f,
     onRequestAdmin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -130,7 +137,7 @@ fun DisplayScreen(
             when {
                 categories.isEmpty() -> CenterHint(stringResource(R.string.display_no_categories))
                 dishes.isEmpty() -> CenterHint(stringResource(R.string.display_no_dishes))
-                else -> DishGrid(dishes = dishes, showStockHint = showStockHint)
+                else -> DishGrid(dishes = dishes, showStockHint = showStockHint, cardAlpha = cardAlpha)
             }
         }
     }
@@ -232,42 +239,48 @@ private fun CategoryChip(name: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * 2 列网格；行高按可用高度摊平，使 12 道菜正好铺满一屏，超过 12 道则滚动。
- * 行高限制在 [CardMinHeight] 与 [CardMaxHeight] 之间，避免菜品少时被拉得过大。
+ * 2 列网格：卡片固定 [CardHeight] 高、行距 [CardSpacing]，12 道一屏铺满，超过 12 道则滚动。
  */
 @Composable
-private fun DishGrid(dishes: List<Dish>, showStockHint: Boolean) {
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val rows = ((dishes.size + 1) / 2).coerceAtLeast(1)
-        val rowHeight = ((maxHeight - CardSpacing * (rows - 1)) / rows)
-            .coerceIn(CardMinHeight, CardMaxHeight)
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(CardSpacing),
-            verticalArrangement = Arrangement.spacedBy(CardSpacing),
-            contentPadding = PaddingValues(bottom = 4.dp)
-        ) {
-            items(dishes, key = { it.id }) { dish ->
-                DishCard(
-                    dish = dish,
-                    showStockHint = showStockHint,
-                    modifier = Modifier.height(rowHeight)
-                )
-            }
+private fun DishGrid(dishes: List<Dish>, showStockHint: Boolean, cardAlpha: Float) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(CardSpacing),
+        verticalArrangement = Arrangement.spacedBy(CardSpacing),
+        contentPadding = PaddingValues(bottom = GridBottomPadding)
+    ) {
+        items(dishes, key = { it.id }) { dish ->
+            DishCard(
+                dish = dish,
+                showStockHint = showStockHint,
+                cardAlpha = cardAlpha,
+                modifier = Modifier.height(CardHeight)
+            )
         }
     }
 }
 
 @Composable
-fun DishCard(dish: Dish, showStockHint: Boolean = true, modifier: Modifier = Modifier) {
+fun DishCard(
+    dish: Dish,
+    showStockHint: Boolean = true,
+    cardAlpha: Float = 1f,
+    modifier: Modifier = Modifier
+) {
     val contentAlpha = if (dish.soldOut) 0.45f else 1f
-    Card(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+    val baseCardColors = CardDefaults.cardColors()
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = baseCardColors.copy(
+            containerColor = baseCardColors.containerColor.copy(alpha = cardAlpha)
+        )
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = CardHorizontalPadding, vertical = 8.dp),
+                .padding(horizontal = CardHorizontalPadding, vertical = CardVerticalPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.alpha(contentAlpha)) { DishThumbnail(dish) }

@@ -20,6 +20,15 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_SHOW_STOCK, true)
         set(value) = prefs.edit().putBoolean(KEY_SHOW_STOCK, value).apply()
 
+    /** 展示页菜品卡片底部不透明度（百分比，范围 [MIN_CARD_ALPHA_PERCENT]..100）。 */
+    var cardAlphaPercent: Int
+        get() = prefs.getInt(KEY_CARD_ALPHA, DEFAULT_CARD_ALPHA_PERCENT)
+            .coerceIn(MIN_CARD_ALPHA_PERCENT, 100)
+        set(value) = prefs
+            .edit()
+            .putInt(KEY_CARD_ALPHA, value.coerceIn(MIN_CARD_ALPHA_PERCENT, 100))
+            .apply()
+
     var adminPinHash: String?
         get() = prefs.getString(KEY_PIN_HASH, null)
         set(value) = prefs.edit().putString(KEY_PIN_HASH, value).apply()
@@ -59,6 +68,11 @@ class SettingsStore(context: Context) {
         const val KEY_PIN_LOCK_UNTIL = "admin_pin_lock_until"
         const val KEY_AUTOSTART = "autostart_enabled"
         const val KEY_SHOW_STOCK = "show_stock"
+        const val KEY_CARD_ALPHA = "card_alpha"
+        /** 卡片底不透明度默认值（百分比）。 */
+        const val DEFAULT_CARD_ALPHA_PERCENT = 75
+        /** 卡片底不透明度下限（百分比），避免卡片完全隐形。 */
+        const val MIN_CARD_ALPHA_PERCENT = 20
         const val KEY_DEVICE_ID = "device_id"
     }
 }
