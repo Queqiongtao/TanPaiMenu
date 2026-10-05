@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -11,18 +12,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -60,8 +60,14 @@ import com.tanpai.menu.ui.theme.StatusColors
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** 侧栏宽度：只放店名与分类，把宽度让给菜品区。 */
-private val SidebarWidth = 150.dp
+/** 顶部条高度：店名、分类胶囊与长按提示共用，高度固定不随内容伸缩。 */
+private val TopBarHeight = 44.dp
+/** 店名最大宽度，超长省略，避免挤占分类胶囊位置。 */
+private val StoreNameMaxWidth = 320.dp
+/** 分类胶囊之间的间距。 */
+private val ChipSpacing = 8.dp
+/** 长按店名进入管理的时长。 */
+private const val AdminLongPressMillis = 2_000L
 
 private val ContentPadding = 12.dp
 private val CardSpacing = 10.dp
@@ -103,22 +109,20 @@ fun DisplayScreen(
         menu.dishes.filter { it.categoryId == selectedCategoryId }
     }
 
-    Row(modifier = modifier.fillMaxSize()) {
-        CategorySidebar(
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(ContentPadding)
+    ) {
+        DisplayTopBar(
+            storeName = storeName,
             categories = categories,
             selectedCategoryId = selectedCategoryId,
             onSelect = { selectedCategoryId = it },
-            storeName = storeName,
-            onRequestAdmin = onRequestAdmin,
-            modifier = Modifier
-                .width(SidebarWidth)
-                .fillMaxHeight()
+            onRequestAdmin = onRequestAdmin
         )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(ContentPadding)
-        ) {
+        Spacer(modifier = Modifier.height(CardSpacing))
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when {
                 categories.isEmpty() -> CenterHint(stringResource(R.string.display_no_categories))
                 dishes.isEmpty() -> CenterHint(stringResource(R.string.display_no_dishes))
@@ -128,80 +132,95 @@ fun DisplayScreen(
     }
 }
 
+/**
+ * 顶部条：左侧店名（长按 2 秒进入管理），右侧分类胶囊（仅多分类时出现）与长按提示。
+ * 始终渲染，保证分类为空时管理入口仍可达。
+ */
 @Composable
-private fun CategorySidebar(
+private fun DisplayTopBar(
+    storeName: String,
     categories: List<Category>,
     selectedCategoryId: Long,
     onSelect: (Long) -> Unit,
-    storeName: String,
-    onRequestAdmin: () -> Unit,
-    modifier: Modifier = Modifier
+    onRequestAdmin: () -> Unit
 ) {
-    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                val released = withTimeoutOrNull(5_000L) { awaitRelease() }
-                                if (released == null) onRequestAdmin()
-                            }
-                        )
-                    }
-                    .padding(horizontal = 12.dp, vertical = 16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(TopBarHeight),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = storeName.ifBlank { stringResource(R.string.app_name) },
+            modifier = Modifier
+                .widthIn(max = StoreNameMaxWidth)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            val released = withTimeoutOrNull(AdminLongPressMillis) { awaitRelease() }
+                            if (released == null) onRequestAdmin()
+                        }
+                    )
+                }
+                .padding(vertical = 4.dp),
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontSize = 24.sp,
+                lineHeight = 30.sp
+            ),
+            fontFamily = ChineseFontFamily,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        if (categories.size > 1) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(ChipSpacing),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = storeName.ifBlank { stringResource(R.string.app_name) },
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontSize = 26.sp,
-                        lineHeight = 32.sp
-                    ),
-                    fontFamily = ChineseFontFamily,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.display_long_press_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(categories, key = { it.id }) { category ->
-                    val selected = category.id == selectedCategoryId
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp)
-                            .clickable { onSelect(category.id) },
-                        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = category.name,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontFamily = ChineseFontFamily,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.onPrimary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
+                categories.forEach { category ->
+                    CategoryChip(
+                        name = category.name,
+                        selected = category.id == selectedCategoryId,
+                        onClick = { onSelect(category.id) }
+                    )
                 }
             }
+            Spacer(modifier = Modifier.width(16.dp))
         }
+        Text(
+            text = stringResource(R.string.display_long_press_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun CategoryChip(name: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.clickable(onClick = onClick),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text(
+            text = name,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+            fontFamily = ChineseFontFamily,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

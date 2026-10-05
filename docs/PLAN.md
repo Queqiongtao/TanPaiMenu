@@ -1,4 +1,4 @@
-﻿# TanPaiMenu 摆摊电子菜单 —— 开发计划
+# TanPaiMenu 摆摊电子菜单 —— 开发计划
 
 > 版本：v1.3 ｜ 状态：Phase 1 已完成，待进入 Phase 2 ｜ 更新日期：2026-10-05
 
@@ -183,9 +183,9 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 ### Phase 1：平板单机 MVP —— 已完成（2026-10-05）
 
 - Room 数据层：实体、DAO、Repository，首启写入一份示例菜单。
-- 展示页：左侧分类侧边栏（大字号，可选中高亮）+ 右侧 `LazyVerticalGrid` 菜品卡（图、名、价、余量角标）；沽清卡片灰化并在行尾显示「已售完」徽标。
+- 展示页：顶部条（店名 + 分类胶囊）+ `LazyVerticalGrid` 菜品卡（图、名、价、余量角标）；沽清卡片灰化并在行尾显示「已售完」徽标。
 - 管理页（PIN 进入）：分类增删改与排序、菜品增删改、改价、传图（相册 / 拍照）、一键卖出、沽清与恢复、撤销上一次卖出。
-- 软 Kiosk：开机自启（`BOOT_COMPLETED`）、屏幕常亮、沉浸式全屏隐藏系统栏、可选注册为 Home 以拦截 Home 键、长按标题 5 秒弹出 PIN 才能退出。
+- 软 Kiosk：开机自启（`BOOT_COMPLETED`）、屏幕常亮、沉浸式全屏隐藏系统栏、可选注册为 Home 以拦截 Home 键、长按店名 2 秒弹出 PIN 才能退出。
 - 菜单 JSON 导出 / 导入备份。
 
 **文档产出**：`docs/design/0001-菜单数据模型与接口契约.md`、`0003-平板运行形态与门禁.md`、`0004-图片处理与数据备份.md`；更新 `docs/architecture.md` 分层与关键流程章节。
@@ -195,16 +195,16 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 **实现与验证（2026-10-05，真机 Teclast T10 / API 24）**：
 
 - 数据层 `data/`：`Entities.kt`、`TpDatabase.kt`、各 DAO、`MenuRepository.kt`、`SeedMenu.kt`；Room schema 导出到 `app/schemas/`。
-- 展示页 `ui/display/`：分类侧边栏 + `LazyVerticalGrid` 菜品卡；沽清灰化并在行尾显示「已售完」徽标，无图时显示菜名首字占位。
+- 展示页 `ui/display/`：顶部条 + `LazyVerticalGrid` 菜品卡；沽清灰化并在行尾显示「已售完」徽标，无图时显示菜名首字占位。
 - 管理页 `ui/admin/`：PIN 门禁、分类与菜品增删改、传图（相册 / 拍照）、卖出 / 撤销 / 沽清。
-- 软 Kiosk `kiosk/`：`BOOT_COMPLETED` 自启、常亮、沉浸式、可选 Home、退出到桌面、长按店名 5 秒进入 PIN。
+- 软 Kiosk `kiosk/`：`BOOT_COMPLETED` 自启、常亮、沉浸式、可选 Home、退出到桌面、长按店名 2 秒进入 PIN。
 - 图片与备份：`imaging/ImageStore.kt`（长边 1280、JPEG 80）、`backup/`（`backup.json` + `images/`，format 1）。
 - 日志与排障：`logging/TpLog.kt`、`scripts/collect-logs.ps1|.bat`。
 - 单测 24 项全通过；真机实测冷启动 502–545ms、网格滚动 p95 16ms、内存稳定在 78MB（详见第 8 节）。
 
 **展示页修订（2026-10-05，见 `docs/design/0006-展示页紧凑布局与默认菜单.md`）**：
 
-- 侧栏 240dp → 150dp；菜品区 2 列 × 6 行横向长卡（56dp 左方图 + 菜名 22sp / 价格 20sp / 有货标识一行），12 道一屏，>12 道滚动。
+- 侧栏 240dp → 150dp → 移除（改为 44dp 顶部条，2026-10-05）；菜品区 2 列 × 6 行横向长卡（56dp 左方图 + 菜名 22sp / 价格 20sp / 有货标识一行），12 道一屏，>12 道滚动。
 - 有货标识可在设置里整体隐藏；未启用库存的菜品在管理页隐藏「卖出 / 撤销」。
 - 默认店名「大金馄饨」，默认菜单为单分类「馄饨」12 道（不启用库存）；设置页新增「恢复默认菜单」。
 - 内置 Noto Sans SC Bold（OFL 1.1，8.5MB）用于店名、分类名与菜名。

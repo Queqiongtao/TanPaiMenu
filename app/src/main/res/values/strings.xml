@@ -5,7 +5,7 @@
     <string name="display_stock_remaining">余 %1$d</string>
     <string name="display_no_dishes">该分类暂无菜品</string>
     <string name="display_no_categories">暂无分类</string>
-    <string name="display_long_press_hint">长按店名 5 秒进入管理</string>
+    <string name="display_long_press_hint">长按店名 2 秒进入管理</string>
 
     <string name="admin_title">菜单管理</string>
     <string name="admin_back_to_display">返回展示</string>
