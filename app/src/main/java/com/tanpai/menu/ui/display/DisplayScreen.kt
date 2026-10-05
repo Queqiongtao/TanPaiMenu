@@ -60,7 +60,7 @@ import com.tanpai.menu.ui.theme.StatusColors
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** 顶部条高度：店名、分类胶囊与长按提示共用，高度固定不随内容伸缩。 */
+/** 顶部条高度：店名与分类胶囊共用，高度固定不随内容伸缩。 */
 private val TopBarHeight = 44.dp
 /** 店名最大宽度，超长省略，避免挤占分类胶囊位置。 */
 private val StoreNameMaxWidth = 320.dp
@@ -133,7 +133,7 @@ fun DisplayScreen(
 }
 
 /**
- * 顶部条：左侧店名（长按 2 秒进入管理），右侧分类胶囊（仅多分类时出现）与长按提示。
+ * 顶部条：左侧店名（长按 2 秒进入管理），右侧分类胶囊（仅多分类时出现）。
  * 始终渲染，保证分类为空时管理入口仍可达。
  */
 @Composable
@@ -186,14 +186,7 @@ private fun DisplayTopBar(
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(16.dp))
         }
-        Text(
-            text = stringResource(R.string.display_long_press_hint),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
     }
 }
 
