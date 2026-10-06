@@ -54,7 +54,7 @@ Phase 1 已实现的单机流程（含实现位置）：
 
 - 启动：`App.onCreate` → `TpLog.init` → `MenuRepository.seedIfEmpty` → `ImageStore.deleteOrphans(菜品图 ∪ 背景图 ∪ 微信二维码)`。背景图与微信二维码不属于任何菜品，必须显式加入引用集合，否则每次冷启动会被当孤儿图删除。
 - 卖出 / 撤销：`ui/admin/AdminViewModel` → `MenuRepository.sell/unsell`（事务内 `SellPolicy` / `UnsellPolicy`，并令 `version` +1）。
-- 图片：`ui/admin/AdminDialogs`（菜品图）与设置弹窗（背景图 / 微信二维码）相册 / 拍照 → `ImageStore.importFromUri` → `filesDir/images/<uuid>.jpg`；菜品图长边 1280 / 质量 80，背景图长边 2048 / 质量 85；微信二维码走 `importLosslessFromUri`（PNG 无损、长边 1024）→ `images/<uuid>.png`。
+- 图片：`ui/admin/AdminDialogs`（菜品图）与设置弹窗（背景图 / 微信二维码）相册 / 拍照 → `ImageStore.importFromUri` → `filesDir/images/<uuid>.jpg`；菜品图长边 1280 / 质量 80，背景图长边 2048 / 质量 85；微信二维码走 `importLosslessFromUri`（PNG 无损、长边 1024）→ `images/<uuid>.png`。 菜品图另有 12 张内置默认图（`assets/dishes/*.jpg`，512×512、JPEG 85），首启 `seedIfEmpty` 与「恢复默认菜单」时经 `ImageStore.importSeedAsset` 复制进 `filesDir/images` 并写入 `Dish.imagePath`（导入在数据库事务外，失败则该菜回退首字占位），见 `docs/design/0014-默认菜品图片.md`。
 - 备份：`backup/BackupManager` 按 format 1 导出 `backup.json` + `images/`；导入先校验后整库覆盖（`MenuRepository.replaceAll`）。
 - 门禁：`ui/TanPaiMenuApp`（长按店名 2 秒 + PIN）、`data/PinManager`（失败锁定）、`kiosk/Kiosk`（沉浸 / 常亮 / 退出到桌面）。
 
@@ -112,3 +112,4 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-06 | 价格改为淡色胶囊底 + 喜庆红 22sp 大字 + 13sp 单位，价格列 100dp → 128dp | 0012 |
 | 2026-10-06 | 价格胶囊宽度改为内容自适应（96–128dp、下限 96dp），价格列仍定宽 128dp 占位 | 0012 |
 | 2026-10-06 | 展示页版式规则化（列数 1–4 + 单行/两行卡片自动分档）、方向锁 sensorLandscape → fullSensor、管理页窄屏侧栏与菜品行兜底 | 0013 |
+| 2026-10-06 | 内置 12 张默认菜品图（`assets/dishes`，512 JPEG），首启与恢复默认菜单导入 `filesDir/images` 并写入 `Dish.imagePath` | 0014 |

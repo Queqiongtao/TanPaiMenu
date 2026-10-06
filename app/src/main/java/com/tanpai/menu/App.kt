@@ -16,10 +16,10 @@ import kotlinx.coroutines.launch
 
 class AppContainer(context: Context) {
     val database: TpDatabase = TpDatabase.build(context)
-    val menuRepository: MenuRepository = MenuRepository(database)
+    val imageStore: ImageStore = ImageStore(context)
+    val menuRepository: MenuRepository = MenuRepository(database, seedImage = imageStore::importSeedAsset)
     val settingsStore: SettingsStore = SettingsStore(context)
     val pinManager: PinManager = PinManager(settingsStore)
-    val imageStore: ImageStore = ImageStore(context)
     val backupManager: BackupManager = BackupManager(context, menuRepository, imageStore)
 }
 

@@ -165,7 +165,10 @@ class AdminViewModel(
         viewModelScope.launch {
             runCatching {
                 repository.resetToSeedMenu()
-                imageStore.deleteOrphans(setOfNotNull(backgroundImagePath, wechatQrImagePath))
+                // 种子会重新导入 12 张默认图，引用集合必须含菜品图，否则刚导入的默认图会被当孤儿删除。
+                imageStore.deleteOrphans(
+                    repository.allImagePaths() + setOfNotNull(backgroundImagePath, wechatQrImagePath)
+                )
             }.onSuccess {
                 _resetDone.value = true
                 TpLog.i(TAG, "已恢复默认菜单")

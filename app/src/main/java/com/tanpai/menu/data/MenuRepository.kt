@@ -37,7 +37,12 @@ data class FullMenu(
  */
 class MenuRepository(
     private val db: TpDatabase,
-    private val now: () -> Long = System::currentTimeMillis
+    private val now: () -> Long = System::currentTimeMillis,
+    /**
+     * 种子图提供者：入参为 `assets/dishes/` 下的文件名，返回相对图片路径或 null（无图）。
+     * 默认不提供，保持数据层不依赖 Android Context，由 `AppContainer` 注入 `ImageStore`。
+     */
+    private val seedImage: suspend (String) -> String? = { null }
 ) {
 
     private val categoryDao = db.categoryDao()
@@ -74,27 +79,46 @@ class MenuRepository(
 
     suspend fun seedIfEmpty() {
         if (categoryDao.count() > 0) return
+        val imagePaths = importSeedImages()
         mutate<Unit> {
             if (categoryDao.count() > 0) return@mutate Unit to null
-            insertSeed()
+            insertSeed(imagePaths)
             Unit to MenuChange.FullReload(bumpVersion())
         }
     }
 
-    /** 清空菜单并写回默认菜单（设置页「恢复默认菜单」）。图片清理由调用方负责。 */
-    suspend fun resetToSeedMenu(): Unit = mutate<Unit> {
-        saleRecordDao.deleteAll()
-        dishDao.deleteAll()
-        categoryDao.deleteAll()
-        insertSeed()
-        Unit to MenuChange.FullReload(bumpVersion())
+    /** 清空菜单并写回默认菜单（设置页「恢复默认菜单」）。旧图片清理由调用方负责。 */
+    suspend fun resetToSeedMenu() {
+        val imagePaths = importSeedImages()
+        mutate<Unit> {
+            saleRecordDao.deleteAll()
+            dishDao.deleteAll()
+            categoryDao.deleteAll()
+            insertSeed(imagePaths)
+            Unit to MenuChange.FullReload(bumpVersion())
+        }
     }
 
-    private suspend fun insertSeed() {
+    /**
+     * 事务外导入种子图，返回「菜品名 -> 图片路径」。
+     * 单张导入失败（返回 null）时该菜无图，展示层回退首字占位，不影响种子写入。
+     */
+    private suspend fun importSeedImages(): Map<String, String> =
+        SeedMenu.imageAssetByName.mapNotNull { (dishName, asset) ->
+            seedImage(asset)?.let { dishName to it }
+        }.toMap()
+
+    private suspend fun insertSeed(imagePaths: Map<String, String>) {
         SeedMenu.categories.forEach { seed ->
             val categoryId = categoryDao.insert(seed.category.copy(updatedAt = now()))
             seed.dishes.forEach { dish ->
-                dishDao.insert(dish.copy(categoryId = categoryId, updatedAt = now()))
+                dishDao.insert(
+                    dish.copy(
+                        categoryId = categoryId,
+                        imagePath = imagePaths[dish.name] ?: dish.imagePath,
+                        updatedAt = now()
+                    )
+                )
             }
         }
     }

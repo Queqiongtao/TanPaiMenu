@@ -38,6 +38,18 @@ class SeedMenuTest {
     }
 
     @Test
+    fun seedDishesCarryUniqueImageAssets() {
+        val assets = SeedMenu.imageAssets
+        assertEquals(12, assets.size)
+        assertTrue(assets.all { it.isNotBlank() })
+        assertEquals(assets.size, assets.distinct().size)
+        assertEquals(
+            SeedMenu.categories.single().dishes.map { it.name },
+            SeedMenu.imageAssetByName.keys.toList()
+        )
+    }
+
+    @Test
     fun seedDishesDisableStockAndUsePortionUnit() {
         val dishes = SeedMenu.categories.single().dishes
         assertTrue(dishes.all { !it.stockEnabled })

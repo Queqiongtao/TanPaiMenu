@@ -32,7 +32,7 @@ class MenuRepositoryTest {
             ApplicationProvider.getApplicationContext(),
             TpDatabase::class.java
         ).build()
-        repository = MenuRepository(db) { 1000L }
+        repository = MenuRepository(db, now = { 1000L })
     }
 
     @After
@@ -51,6 +51,36 @@ class MenuRepositoryTest {
         repository.seedIfEmpty()
         assertEquals(1, db.categoryDao().getAll().size)
         assertEquals(12, db.dishDao().getAll().size)
+    }
+
+    @Test
+    fun seedWritesImagesProvidedBySeedImage() = runTest {
+        val withImages = MenuRepository(db, { 1000L }) { asset -> "images/$asset.jpg" }
+        withImages.seedIfEmpty()
+
+        val dishes = db.dishDao().getAll()
+        assertEquals(12, dishes.size)
+        assertEquals(
+            SeedMenu.imageAssets.map { "images/$it.jpg" }.toSet(),
+            dishes.mapNotNull { it.imagePath }.toSet()
+        )
+    }
+
+    @Test
+    fun seedWithoutSeedImageLeavesDishesWithoutImages() = runTest {
+        repository.seedIfEmpty()
+        assertTrue(db.dishDao().getAll().all { it.imagePath == null })
+    }
+
+    @Test
+    fun resetToSeedMenuRewritesSeedImages() = runTest {
+        val withImages = MenuRepository(db, { 1000L }) { asset -> "images/$asset.jpg" }
+        withImages.seedIfEmpty()
+        withImages.resetToSeedMenu()
+
+        val dishes = db.dishDao().getAll()
+        assertEquals(12, dishes.size)
+        assertTrue(dishes.all { it.imagePath != null })
     }
 
     @Test

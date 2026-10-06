@@ -44,6 +44,17 @@ class ImageStore(private val context: Context) {
         maxEdge: Int = WECHAT_QR_MAX_EDGE
     ): String? = importAs(uri, maxEdge, "png", Bitmap.CompressFormat.PNG, 100)
 
+    /**
+     * 导入内置默认菜品图：从 `assets/[SEED_ASSETS_DIR]` 读取并压缩保存，返回相对路径。
+     * asset 缺失或解码失败返回 null，调用方按「无图」处理。
+     */
+    suspend fun importSeedAsset(assetName: String): String? = withContext(Dispatchers.IO) {
+        val bitmap = runCatching {
+            context.assets.open("$SEED_ASSETS_DIR/$assetName").use { decodeScaled(it, SEED_IMAGE_MAX_EDGE) }
+        }.getOrNull() ?: return@withContext null
+        saveBitmap(bitmap, "jpg", Bitmap.CompressFormat.JPEG, JPEG_QUALITY)
+    }
+
     /** 解码 + 缩放 + 落盘的共用实现，[extension] 与 [format] 决定输出格式。 */
     private suspend fun importAs(
         uri: Uri,
@@ -55,12 +66,22 @@ class ImageStore(private val context: Context) {
         val bitmap = context.contentResolver.openInputStream(uri)
             ?.use { decodeScaled(it, maxEdge) }
             ?: return@withContext null
+        saveBitmap(bitmap, extension, format, quality)
+    }
+
+    /** 把 [bitmap] 压缩落盘到 `images/<uuid>.<extension>` 并回收，返回相对路径。 */
+    private fun saveBitmap(
+        bitmap: Bitmap,
+        extension: String,
+        format: Bitmap.CompressFormat,
+        quality: Int
+    ): String {
         val target = File(imagesDir, "${UUID.randomUUID()}.$extension")
         target.outputStream().use { out ->
             bitmap.compress(format, quality, out)
         }
         bitmap.recycle()
-        "$IMAGES_DIR/${target.name}"
+        return "$IMAGES_DIR/${target.name}"
     }
 
     fun delete(imagePath: String?) {
@@ -120,6 +141,10 @@ class ImageStore(private val context: Context) {
         const val IMAGES_DIR = "images"
         private const val CAPTURE_DIR = "capture"
         private const val MAX_EDGE = 1280
+        /** 内置默认菜品图所在 assets 子目录。 */
+        const val SEED_ASSETS_DIR = "dishes"
+        /** 内置默认菜品图长边：源图 2048，展示端缩略图 56dp（T10 上约 149px），512 有约 3.4 倍余量。 */
+        const val SEED_IMAGE_MAX_EDGE = 512
         private const val JPEG_QUALITY = 80
         /** 背景图长边上限，明显高于缩略图以适配平板整屏铺满。 */
         const val BACKGROUND_MAX_EDGE = 2048
