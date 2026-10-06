@@ -17,7 +17,7 @@
 app/src/main/java/com/tanpai/menu/
 ├─ data/        # Room 实体、DAO、Repository、设置、AppMeta（全局 version）
 ├─ domain/      # 纯业务规则（卖出 / 撤销策略、价格格式化）
-├─ host/        # 主机侧：NanoHTTPD REST/WS、单写者队列、配对与鉴权
+├─ host/        # 主机侧：NanoHTTPD REST/WS、前台服务保活与常驻通知、连接管理、配对与鉴权
 ├─ client/      # 客户端侧：发现、连接、镜像状态、重连
 ├─ net/protocol/ # 契约 DTO、ISO-8601、实体 ↔ DTO 映射（主机与客户端共用）
 ├─ net/         # REST 客户端、WS 客户端（Phase 3）
@@ -33,7 +33,7 @@ app/src/main/java/com/tanpai/menu/
 
 模块边界：`host` 与 `client` 不互相引用；跨模块只经 `net` / `data` 的接口与 DTO 交互。
 
-Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 已落地 `net/protocol` 与 `host`（M6 契约与单写者、M7 REST / WS 与配对信息，前台服务保活属 M8）；`net`（客户端）、`client`、`ui/client` 为 Phase 3 预留。
+Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 已落地 `net/protocol` 与 `host`（M6 契约与单写者、M7 REST / WS 与配对信息、M8 前台服务保活 / 启停开关 / 在线设备列表）；`net`（客户端）、`client`、`ui/client` 为 Phase 3 预留。
 
 ## 3. 关键流程与数据流
 
@@ -49,6 +49,13 @@ Phase 2 主机写管线（M6 起实现）：客户端 / 本机命令 → `host` 
 
 实现位置：`data/MenuRepository.kt`（`writeMutex` 串行化 + `events` 事件流，提交后按序发出）、`data/MenuChange.kt`（变更类型）、`net/protocol/Contract.kt`（DTO / ISO-8601 / 实体映射）。
 验证：JVM 单测 36 项通过（含 `ContractTest` 12 项）；真机 Teclast T10 / API 24 仪表测试 11 项通过。
+Phase 2 主机保活与在线设备（M8 起实现）：
+
+- 保活：`host/HostService.kt` 以前台服务（`START_STICKY` + 常驻通知）拉起并维持 `HostServer`，服务器实例仍由 `AppContainer` 持有；`SettingsStore.hostEnabled`（默认开）控制启停，关闭即停监听、关闭全部 WS（码 1001）并移除通知。
+- 在线设备：数据源为实时 WS 连接快照（`WsHub.Connection.connectedAt` → `connections()` → `HostServer.onlineDevices()` → `HostStatusProvider.onlineDevices()`），不读 `connected_device` 表（长连接会让 `lastSeen` 失真）；设置弹窗可见期间每 2 秒刷新。
+- 心跳：服务端 `READ_TIMEOUT_MS = 60_000` + `PING_INTERVAL_MS = 20_000` 周期 ping，避免空闲连接被读超时断开。
+- 日志分级：`HostApi` / `HostServer` 的日志回调拆为 `logInfo` / `logError`，正常信息不再记为错误级别。
+- 验证：JVM 单测 88 项、平板仪表测试 46 项全绿；真机确认前台服务常驻、开关即时生效、在线列表随连接增减。详见 `docs/design/0016-主机服务保活与在线设备列表.md`。
 
 Phase 1 已实现的单机流程（含实现位置）：
 
@@ -56,7 +63,7 @@ Phase 1 已实现的单机流程（含实现位置）：
 - 卖出 / 撤销：`ui/admin/AdminViewModel` → `MenuRepository.sell/unsell`（事务内 `SellPolicy` / `UnsellPolicy`，并令 `version` +1）。
 - 图片：`ui/admin/AdminDialogs`（菜品图）与设置弹窗（背景图 / 微信二维码）相册 / 拍照 → `ImageStore.importFromUri` → `filesDir/images/<uuid>.jpg`；菜品图长边 1280 / 质量 80，背景图长边 2048 / 质量 85；微信二维码走 `importLosslessFromUri`（PNG 无损、长边 1024）→ `images/<uuid>.png`。 菜品图另有 12 张内置默认图（`assets/dishes/*.jpg`，512×512、JPEG 85），首启 `seedIfEmpty` 与「恢复默认菜单」时经 `ImageStore.importSeedAsset` 复制进 `filesDir/images` 并写入 `Dish.imagePath`（导入在数据库事务外，失败则该菜回退首字占位），见 `docs/design/0014-默认菜品图片.md`。
 - 备份：`backup/BackupManager` 按 format 1 导出 `backup.json` + `images/`；导入先校验后整库覆盖（`MenuRepository.replaceAll`）。
-- 门禁：`ui/TanPaiMenuApp`（长按店名 2 秒 + PIN）、`data/PinManager`（失败锁定）、`kiosk/Kiosk`（沉浸 / 常亮 / 退出到桌面）。
+- 门禁：`ui/TanPaiMenuApp`（长按店名 2 秒 + PIN；忘记密码长按 3 秒 → 强制重设）、`ui/admin/AdminDialogs`（修改管理密码 / 关闭密码保护）、`data/PinManager`（失败锁定、`clearPin`）、`kiosk/Kiosk`（沉浸 / 常亮 / 退出到桌面）。见 `docs/design/0017-管理密码重置与修改.md`。
 
 - 主机服务（M7）：`App.onCreate` 在 IO 协程内启动 `HostServer`（NanoWSD，端口从 `SettingsStore.serverPort` 起顺延 8080→8082）→ `host/HostApi` 做 Bearer 鉴权 / `requestId` 幂等 / 参数校验 → `host/RepositoryMenuBackend` 走 `MenuRepository` 单写者事务 → 事务提交事件由 `host/WsHub` 广播给各 WS 连接（首帧 `snapshot`，增量 `dish.*` / `category.*` / `device.*`）；图片走 `POST /images`（multipart，魔数判型，长边 ≤1280 JPEG）与 `GET /images/{name}`；设备注册表在 `connected_device`（`/devices`，`lastSeen` > 30s 视为离线）；配对信息（`http://<ip>:<port>`、`pairToken`、zxing 二维码）在管理页设置弹窗展示并可更换。容器差异：请求体不依赖 NanoHTTPD `parseBody`，按 `Content-Length` 读原始字节并显式 UTF-8 解码（否则中文乱码、且 PATCH 拿不到体）；4401 关闭帧手工构造。见 `docs/design/0015-主机服务接口实现.md`。
 ## 4. 接口与数据模型
@@ -115,3 +122,5 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-06 | 展示页版式规则化（列数 1–4 + 单行/两行卡片自动分档）、方向锁 sensorLandscape → fullSensor、管理页窄屏侧栏与菜品行兜底 | 0013 |
 | 2026-10-06 | 内置 12 张默认菜品图（`assets/dishes`，512 JPEG），首启与恢复默认菜单导入 `filesDir/images` 并写入 `Dish.imagePath` | 0014 |
 | 2026-10-06 | M7 落地：局域网 REST /api/v1/* + WS /ws、Bearer 鉴权与幂等、设备注册表与库 1→2 迁移、开机自启与管理页配对信息（地址 / 配对码 / 二维码 / 更换） | 0015、0002 |
+| 2026-10-07 | M8 落地：主机前台服务保活与启停开关、在线设备列表（实时 WS 快照）、WS 心跳修复、日志分级 | 0016、0002 |
+| 2026-10-07 | 门禁补齐：修改管理密码、关闭密码保护、忘记密码长按重置 | 0017、0003 |
