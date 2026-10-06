@@ -50,7 +50,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +65,7 @@ import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.kiosk.KeepScreenOn
 import com.tanpai.menu.ui.theme.BackgroundStyles
 import com.tanpai.menu.ui.theme.ChineseFontFamily
+import com.tanpai.menu.ui.theme.PriceColors
 import com.tanpai.menu.ui.theme.StatusColors
 import com.tanpai.menu.ui.theme.StoreNameColors
 import com.tanpai.menu.ui.theme.StoreNameFontFamily
@@ -124,7 +128,16 @@ private val ThumbnailGap = 8.dp
 /** 菜名 / 价格 / 状态三列之间的间距。 */
 private val ColumnGap = 5.dp
 /** 价格列定宽，保证跨卡片左边界一致。 */
-private val PriceColumnWidth = 100.dp
+private val PriceColumnWidth = 128.dp
+/** 价格胶囊圆角与内边距。 */
+private val PriceTagCorner = 10.dp
+private val PriceTagHorizontalPadding = 10.dp
+private val PriceTagVerticalPadding = 4.dp
+/** 价格数字字号（与菜名同级）与单位字号。 */
+private val PriceTextSize = 22.sp
+private val PriceUnitSize = 13.sp
+/** 单位文字相对价格数字的透明度，避免抢焦点。 */
+private const val PriceUnitContentAlpha = 0.72f
 /** 状态列定宽（有货 / 余 N / 已售完徽标共用）。 */
 private val StatusColumnWidth = 68.dp
 
@@ -388,6 +401,46 @@ private fun DishGrid(dishes: List<Dish>, showStockHint: Boolean, cardAlpha: Floa
     }
 }
 
+/**
+ * 价格胶囊：淡色圆角底 + 喜庆红大字，单位以小字跟随，供顾客一眼看到价格。
+ *
+ * 卡片底可低至 15% 不透明度、背景可能是红色或照片，价格区靠固定 90% 白的胶囊底保证可读
+ * （红字落在白底上约 6.2:1）；胶囊底不随卡片不透明度变化。见 `docs/design/0012-展示页价格强调.md`。
+ */
+@Composable
+private fun PriceTag(priceText: String, unit: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .width(PriceColumnWidth)
+            .clip(RoundedCornerShape(PriceTagCorner))
+            .background(PriceColors.Container)
+            .padding(
+                horizontal = PriceTagHorizontalPadding,
+                vertical = PriceTagVerticalPadding
+            ),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(fontSize = PriceTextSize)) { append(priceText) }
+                if (unit.isNotBlank()) {
+                    withStyle(
+                        SpanStyle(
+                            fontSize = PriceUnitSize,
+                            color = PriceColors.Content.copy(alpha = PriceUnitContentAlpha)
+                        )
+                    ) { append(" / " + unit) }
+                }
+            },
+            style = MaterialTheme.typography.titleMedium,
+            fontFamily = ChineseFontFamily,
+            color = PriceColors.Content,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 @Composable
 fun DishCard(
     dish: Dish,
@@ -425,15 +478,10 @@ fun DishCard(
                 overflow = TextOverflow.Clip
             )
             Spacer(modifier = Modifier.width(ColumnGap))
-            Text(
-                text = "${PriceFormatter.formatYuan(dish.priceCents)} / ${dish.unit}",
-                modifier = Modifier
-                    .width(PriceColumnWidth)
-                    .alpha(contentAlpha),
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
-                fontFamily = ChineseFontFamily,
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1
+            PriceTag(
+                priceText = PriceFormatter.formatYuan(dish.priceCents),
+                unit = dish.unit,
+                modifier = Modifier.alpha(contentAlpha)
             )
             Spacer(modifier = Modifier.width(ColumnGap))
             Box(
