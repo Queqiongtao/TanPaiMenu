@@ -21,7 +21,7 @@ app/src/main/java/com/tanpai/menu/
 ├─ client/      # 客户端侧：发现、连接、镜像状态、重连
 ├─ net/protocol/ # 契约 DTO、ISO-8601、实体 ↔ DTO 映射（主机与客户端共用）
 ├─ net/         # REST 客户端、WS 客户端（Phase 3）
-├─ ui/display/  # 顾客展示页（2 列 × 6 行横卡；自定义背景图 / 内置样式与白色蒙版；内置字体见 ui/theme）
+├─ ui/display/  # 顾客展示页（2 列 × 6 行横卡；自定义背景图 / 内置样式与白色蒙版；店名左侧微信二维码与点击放大浮层；内置字体见 ui/theme）
 ├─ ui/admin/    # 管理与设置页（双端共用）
 ├─ ui/theme/    # 字体（Noto Sans SC Bold + 店名专用霞鹜文楷子集）、字型、展示页状态语义色、店名招牌配色与内置背景样式
 ├─ ui/client/   # 手机客户端管理页（复用 admin 组件）
@@ -38,9 +38,10 @@ Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`�
 ## 3. 关键流程与数据流
 
 - 展示：`data` 读 Room → `ui/display` 渲染；沽清卡片灰化并在行尾显示「已售完」徽标。
-- 展示布局：顶部条 72dp（店名 48sp 居中的渐变招牌——`StoreNameColors` 紫罗兰横向渐变底 + 1dp 半透明白描边 + 8dp 投影，`StoreNameFontFamily` 楷体子集，超 6 字降档 36sp，长按店名 2 秒进管理；多分类时靠右的分类胶囊 16sp）+ `GridCells.Fixed(2)` 横卡（左 56dp 方图 + 定宽三列：名称弹性 / 价格 100dp / 状态 68dp，均左对齐；菜名超宽跑马灯滚动）；卡片固定 68dp、列距 16dp、行距 12dp、底部留白 24dp，12 道一屏、超出滚动；卡片底色按设置的不透明度（`SettingsStore.cardAlphaPercent`，默认 75%）叠加。字体 `ui/theme/Type.kt`（菜名等 Noto Sans SC Bold，OFL 1.1；店名霞鹜文楷子集，OFL 1.1，见 `docs/third-party/`）。
+- 展示布局：顶部条 72dp（店名 48sp 居中的渐变招牌——`StoreNameColors` 紫罗兰横向渐变底 + 1dp 半透明白描边 + 8dp 投影，`StoreNameFontFamily` 楷体子集，超 6 字降档 36sp，长按店名 2 秒进管理；多分类时靠右的分类胶囊 16sp；店名左侧为微信二维码入口：小码 56dp + 「加微信」13sp，点击弹出全屏放大浮层、5 秒自动复原或点击任意处立即关闭，未设置则不渲染）+ `GridCells.Fixed(2)` 横卡（左 56dp 方图 + 定宽三列：名称弹性 / 价格 100dp / 状态 68dp，均左对齐；菜名超宽跑马灯滚动）；卡片固定 68dp、列距 16dp、行距 12dp、底部留白 24dp，12 道一屏、超出滚动；卡片底色按设置的不透明度（`SettingsStore.cardAlphaPercent`，默认 75%）叠加。字体 `ui/theme/Type.kt`（菜名等 Noto Sans SC Bold，OFL 1.1；店名霞鹜文楷子集，OFL 1.1，见 `docs/third-party/`）。
 - 卖出：`ui/admin` 命令（乐观更新）→ REST → `host` 单写者队列 → 事务（写 `SaleRecord` + 扣库存 + 全局 `version` +1）→ WS 广播 → 各端应用。
 - 展示背景：`DisplayScreen` 在内容层下叠一层背景 + 一层白色蒙版（`SettingsStore.backgroundScrimPercent`，默认 30%）；背景按优先级三选一——自定义图（`backgroundImagePath`，`AsyncImage(Crop)` 整屏铺满）> 内置样式（`backgroundStyleId`，`ui/theme/BackgroundStyles.kt` 的 6 款代码绘制渐变，`Modifier.backgroundStyle` 叠绘）> 不渲染（M3 纯色底）。两者互斥，由管理页写入时保证；内置样式不涉及文件，故不参与孤儿图清理与备份。见 `docs/design/0007-展示页背景图片.md`、`docs/design/0009-展示页内置背景样式.md`。
+- 展示微信二维码：`SettingsStore.wechatQrImagePath`（key `wechat_qr_image`）指向 `images/<uuid>.png`；店主在管理页设置弹窗经 `ImageStore.importLosslessFromUri`（PNG 无损、长边 1024）导入，可相册或拍照；放大浮层在 `ui/display/WechatQrOverlay.kt`（`WECHAT_QR_AUTO_COLLAPSE_MILLIS = 5000`）；`DisplayScreen` 以 `File.exists()` 判定是否渲染入口；与背景图同为「非菜品图」，须加入启动孤儿图清理与「恢复默认菜单」保留集合；不参与备份（`backup.json` 仍 format 1）。见 `docs/design/0010-展示页微信二维码.md`。
 - 同步：客户端 `/state` 全量对齐 + WS 事件增量；用 `version` 判新旧；断线重连重取快照。
 - 配对：主机生成 token → 二维码 / NSD / 手输 → 客户端带 token 请求。
 
@@ -51,9 +52,9 @@ Phase 2 主机写管线（M6 起实现）：客户端 / 本机命令 → `host` 
 
 Phase 1 已实现的单机流程（含实现位置）：
 
-- 启动：`App.onCreate` → `TpLog.init` → `MenuRepository.seedIfEmpty` → `ImageStore.deleteOrphans(菜品图 ∪ 背景图)`。背景图不属于任何菜品，必须显式加入引用集合，否则每次冷启动会被当孤儿图删除。
+- 启动：`App.onCreate` → `TpLog.init` → `MenuRepository.seedIfEmpty` → `ImageStore.deleteOrphans(菜品图 ∪ 背景图 ∪ 微信二维码)`。背景图与微信二维码不属于任何菜品，必须显式加入引用集合，否则每次冷启动会被当孤儿图删除。
 - 卖出 / 撤销：`ui/admin/AdminViewModel` → `MenuRepository.sell/unsell`（事务内 `SellPolicy` / `UnsellPolicy`，并令 `version` +1）。
-- 图片：`ui/admin/AdminDialogs`（菜品图）与设置弹窗（背景图）相册 / 拍照 → `ImageStore.importFromUri` → `filesDir/images/<uuid>.jpg`；菜品图长边 1280 / 质量 80，背景图长边 2048 / 质量 85。
+- 图片：`ui/admin/AdminDialogs`（菜品图）与设置弹窗（背景图 / 微信二维码）相册 / 拍照 → `ImageStore.importFromUri` → `filesDir/images/<uuid>.jpg`；菜品图长边 1280 / 质量 80，背景图长边 2048 / 质量 85；微信二维码走 `importLosslessFromUri`（PNG 无损、长边 1024）→ `images/<uuid>.png`。
 - 备份：`backup/BackupManager` 按 format 1 导出 `backup.json` + `images/`；导入先校验后整库覆盖（`MenuRepository.replaceAll`）。
 - 门禁：`ui/TanPaiMenuApp`（长按店名 2 秒 + PIN）、`data/PinManager`（失败锁定）、`kiosk/Kiosk`（沉浸 / 常亮 / 退出到桌面）。
 
@@ -105,3 +106,4 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-06 | 展示页支持自定义背景图（整屏铺满裁切 + 可调白色蒙版），启动孤儿图清理与恢复默认菜单保留背景图 | 0007 |
 | 2026-10-06 | 展示页店名 48sp 渐变招牌（描边 + 投影）并换用霞鹜文楷子集字体；顶栏 72dp、行距 12dp，12 道仍一屏 | 0008 |
 | 2026-10-06 | 展示页新增 6 款代码生成的中式暖色内置背景样式，与自定义图互斥单选，蒙版同样生效 | 0009 |
+| 2026-10-06 | 展示页店名左侧新增微信二维码入口（无损 PNG 导入、点击放大、5 秒自动复原），孤儿图清理与恢复默认菜单保留二维码 | 0010 |

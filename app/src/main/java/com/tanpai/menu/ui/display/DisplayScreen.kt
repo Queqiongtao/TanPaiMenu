@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -94,6 +95,13 @@ private val StoreNameSmallLineHeight = 44.sp
 /** 店名字数超过该值时降档。 */
 private const val StoreNameLongThreshold = 6
 
+/** 顶栏微信二维码入口：小码边长。 */
+private val WechatQrBadgeSize = 56.dp
+/** 小码白底容器的内边距，四周留白便于扫码识别。 */
+private val WechatQrBadgePadding = 4.dp
+/** 二维码入口块的可点区域内边距。 */
+private val WechatQrEntryPadding = 4.dp
+
 private val ContentPadding = 12.dp
 /** 顶部条与网格之间的间距（顶栏加高后收紧）。 */
 private val TopBarGap = 8.dp
@@ -129,6 +137,7 @@ fun DisplayScreen(
     backgroundImagePath: String? = null,
     backgroundStyleId: String? = null,
     backgroundScrim: Float = 0.3f,
+    wechatQrImagePath: String? = null,
     onRequestAdmin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -151,6 +160,10 @@ fun DisplayScreen(
     val backgroundFile = backgroundImagePath?.let { File(context.filesDir, it) }
     val hasBackgroundImage = backgroundFile != null && backgroundFile.exists()
     val backgroundStyle = BackgroundStyles.byId(backgroundStyleId)
+    val wechatQrFile = wechatQrImagePath
+        ?.let { File(context.filesDir, it) }
+        ?.takeIf { it.exists() }
+    var qrExpanded by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
         // 背景优先级：自定义图 > 内置样式 > 不渲染（回退 M3 纯色底）。
@@ -184,6 +197,8 @@ fun DisplayScreen(
                 storeName = storeName,
                 categories = categories,
                 selectedCategoryId = selectedCategoryId,
+                wechatQrFile = wechatQrFile,
+                onWechatQrClick = { qrExpanded = true },
                 onSelect = { selectedCategoryId = it },
                 onRequestAdmin = onRequestAdmin
             )
@@ -200,12 +215,16 @@ fun DisplayScreen(
                 }
             }
         }
+        if (qrExpanded && wechatQrFile != null) {
+            WechatQrOverlay(qrFile = wechatQrFile, onDismiss = { qrExpanded = false })
+        }
     }
 }
 
 /**
  * 顶部条：店名做成水平居中的渐变招牌（紫罗兰渐变底 + 半透明白描边 + 投影，长按 2 秒进入管理），
  * 店名与胶囊分别限宽（0.4 / 0.3 顶栏宽），最大宽度之和不超过顶栏宽，保证不重叠。
+ * 左侧为微信二维码入口（小码 + 「加微信」，未设置时不渲染），点击弹出放大浮层。
  * 始终渲染，保证分类为空时管理入口仍可达。
  */
 @Composable
@@ -213,6 +232,8 @@ private fun DisplayTopBar(
     storeName: String,
     categories: List<Category>,
     selectedCategoryId: Long,
+    wechatQrFile: File?,
+    onWechatQrClick: () -> Unit,
     onSelect: (Long) -> Unit,
     onRequestAdmin: () -> Unit
 ) {
@@ -267,6 +288,35 @@ private fun DisplayTopBar(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+        if (wechatQrFile != null) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClick = onWechatQrClick)
+                    .padding(WechatQrEntryPadding),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AsyncImage(
+                    model = wechatQrFile,
+                    contentDescription = stringResource(R.string.display_wechat_qr_hint),
+                    modifier = Modifier
+                        .size(WechatQrBadgeSize)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White)
+                        .padding(WechatQrBadgePadding),
+                    contentScale = ContentScale.Fit
+                )
+                Text(
+                    text = stringResource(R.string.display_wechat_qr_hint),
+                    modifier = Modifier.padding(start = 8.dp),
+                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
+                    fontFamily = ChineseFontFamily,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+            }
         }
         if (categories.size > 1) {
             Row(

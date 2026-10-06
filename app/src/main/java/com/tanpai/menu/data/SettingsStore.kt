@@ -43,6 +43,15 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_BACKGROUND_STYLE, null)?.takeIf { it.isNotBlank() }
         set(value) = prefs.edit().putString(KEY_BACKGROUND_STYLE, value).apply()
 
+    /**
+     * 展示页微信二维码图片相对路径（`images/<uuid>.png`），null 表示未设置。
+     *
+     * 由店主自行上传的二维码图，采用无损 PNG 保存；未设置时展示页不渲染该入口。
+     */
+    var wechatQrImagePath: String?
+        get() = prefs.getString(KEY_WECHAT_QR_IMAGE, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit().putString(KEY_WECHAT_QR_IMAGE, value).apply()
+
     /** 展示页背景图上的白色蒙版不透明度（百分比，范围 0..80）。 */
     var backgroundScrimPercent: Int
         get() = prefs.getInt(KEY_BACKGROUND_SCRIM, DEFAULT_BACKGROUND_SCRIM_PERCENT)
@@ -101,6 +110,7 @@ class SettingsStore(context: Context) {
         const val MIN_CARD_ALPHA_PERCENT = 20
         const val KEY_BACKGROUND_IMAGE = "background_image"
         const val KEY_BACKGROUND_STYLE = "background_style"
+        const val KEY_WECHAT_QR_IMAGE = "wechat_qr_image"
         const val KEY_BACKGROUND_SCRIM = "background_scrim"
         /** 背景蒙版默认不透明度（百分比）。 */
         const val DEFAULT_BACKGROUND_SCRIM_PERCENT = 30

@@ -48,6 +48,8 @@ class AdminViewModel(
         private set
     var backgroundStyleId by mutableStateOf(settings.backgroundStyleId)
         private set
+    var wechatQrImagePath by mutableStateOf(settings.wechatQrImagePath)
+        private set
 
     var backgroundScrimPercent by mutableStateOf(settings.backgroundScrimPercent)
         private set
@@ -127,12 +129,32 @@ class AdminViewModel(
         TpLog.i(TAG, "已恢复默认背景")
     }
 
+    /** 导入并保存展示页微信二维码（无损 PNG），成功后删除旧图；返回是否导入成功。 */
+    suspend fun applyWechatQr(uri: Uri): Boolean {
+        val path = imageStore.importLosslessFromUri(uri) ?: return false
+        val previous = wechatQrImagePath
+        wechatQrImagePath = path
+        settings.wechatQrImagePath = path
+        if (previous != null && previous != path) imageStore.delete(previous)
+        TpLog.i(TAG, "已更新微信二维码")
+        return true
+    }
+
+    /** 清除展示页微信二维码并删除对应文件。 */
+    fun clearWechatQr() {
+        val previous = wechatQrImagePath
+        wechatQrImagePath = null
+        settings.wechatQrImagePath = null
+        imageStore.delete(previous)
+        TpLog.i(TAG, "已清除微信二维码")
+    }
+
     /** 清空菜单与图片并写回默认菜单，用于「恢复默认菜单」。 */
     fun resetToDefaultMenu() {
         viewModelScope.launch {
             runCatching {
                 repository.resetToSeedMenu()
-                imageStore.deleteOrphans(setOfNotNull(backgroundImagePath))
+                imageStore.deleteOrphans(setOfNotNull(backgroundImagePath, wechatQrImagePath))
             }.onSuccess {
                 _resetDone.value = true
                 TpLog.i(TAG, "已恢复默认菜单")

@@ -64,6 +64,7 @@ fun TanPaiMenuApp(
             backgroundImagePath = settings.backgroundImagePath,
             backgroundStyleId = settings.backgroundStyleId,
             backgroundScrim = settings.backgroundScrimPercent / 100f,
+            wechatQrImagePath = settings.wechatQrImagePath,
             onRequestAdmin = {
                 pinDialog = if (pinManager.isPinSet()) PinDialog.Enter else PinDialog.Setup
             }

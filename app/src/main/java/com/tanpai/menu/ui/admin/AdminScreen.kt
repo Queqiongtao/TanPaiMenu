@@ -295,6 +295,7 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             backgroundImagePath = viewModel.backgroundImagePath,
             backgroundStyleId = viewModel.backgroundStyleId,
             backgroundScrimPercent = viewModel.backgroundScrimPercent,
+            wechatQrImagePath = viewModel.wechatQrImagePath,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAutostartChange = { viewModel.updateAutostart(it) },
             onShowStockHintChange = { viewModel.updateShowStockHint(it) },
@@ -304,6 +305,8 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             onImportBackgroundImage = { uri -> viewModel.applyBackgroundImage(uri) },
             onCreateCaptureUri = { viewModel.createCaptureUri() },
             onClearBackground = { viewModel.clearBackground() },
+            onImportWechatQr = { uri -> viewModel.applyWechatQr(uri) },
+            onClearWechatQr = { viewModel.clearWechatQr() },
             resetDone = resetDone,
             onResetSeed = { viewModel.resetToDefaultMenu() },
             onClearResetDone = { viewModel.clearResetDone() },
@@ -325,6 +328,7 @@ private fun SettingsDialog(
     backgroundImagePath: String?,
     backgroundStyleId: String?,
     backgroundScrimPercent: Int,
+    wechatQrImagePath: String?,
     onStoreNameChange: (String) -> Unit,
     onAutostartChange: (Boolean) -> Unit,
     onShowStockHintChange: (Boolean) -> Unit,
@@ -334,6 +338,8 @@ private fun SettingsDialog(
     onImportBackgroundImage: suspend (Uri) -> Boolean,
     onCreateCaptureUri: () -> Uri,
     onClearBackground: () -> Unit,
+    onImportWechatQr: suspend (Uri) -> Boolean,
+    onClearWechatQr: () -> Unit,
     resetDone: Boolean,
     onResetSeed: () -> Unit,
     onClearResetDone: () -> Unit,
@@ -354,11 +360,35 @@ private fun SettingsDialog(
     var scrim by remember { mutableStateOf(backgroundScrimPercent / 100f) }
     var backgroundSet by remember { mutableStateOf(backgroundImagePath != null) }
     var selectedStyleId by remember { mutableStateOf(backgroundStyleId) }
-    var importFailed by remember { mutableStateOf(false) }
-    var permissionDenied by remember { mutableStateOf(false) }
+    var qrSet by remember { mutableStateOf(wechatQrImagePath != null) }
+    var failedTarget by remember { mutableStateOf<ImageTarget?>(null) }
+    var deniedTarget by remember { mutableStateOf<ImageTarget?>(null) }
     var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingTarget by remember { mutableStateOf<ImageTarget?>(null) }
     val scope = rememberCoroutineScope()
     val importFailedText = stringResource(R.string.settings_background_import_failed)
+    val permissionDeniedText = stringResource(R.string.settings_camera_permission_denied)
+
+    /** 按目标导入图片并刷新对应分区的状态与提示。 */
+    val importForTarget: suspend (ImageTarget, Uri) -> Unit = { target, uri ->
+        val ok = when (target) {
+            ImageTarget.Background -> onImportBackgroundImage(uri)
+            ImageTarget.WechatQr -> onImportWechatQr(uri)
+        }
+        if (ok) {
+            when (target) {
+                ImageTarget.Background -> {
+                    backgroundSet = true
+                    selectedStyleId = null
+                }
+
+                ImageTarget.WechatQr -> qrSet = true
+            }
+            failedTarget = null
+        } else {
+            failedTarget = target
+        }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -367,46 +397,49 @@ private fun SettingsDialog(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri -> pendingImport = uri }
 
-    val backgroundGalleryLauncher = rememberLauncherForActivityResult(
+    val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                if (onImportBackgroundImage(uri)) {
-                    backgroundSet = true
-                    selectedStyleId = null
-                    importFailed = false
-                } else {
-                    importFailed = true
-                }
-            }
+        val target = pendingTarget
+        if (uri != null && target != null) {
+            scope.launch { importForTarget(target, uri) }
         }
     }
-    val backgroundCameraLauncher = rememberLauncherForActivityResult(
+    val captureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         val uri = pendingCaptureUri
-        if (success && uri != null) {
-            scope.launch {
-                if (onImportBackgroundImage(uri)) {
-                    backgroundSet = true
-                    selectedStyleId = null
-                    importFailed = false
-                } else {
-                    importFailed = true
-                }
-            }
+        val target = pendingTarget
+        if (success && uri != null && target != null) {
+            scope.launch { importForTarget(target, uri) }
         }
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) {
+        val target = pendingTarget
+        if (granted && target != null) {
             val uri = onCreateCaptureUri()
             pendingCaptureUri = uri
-            backgroundCameraLauncher.launch(uri)
+            captureLauncher.launch(uri)
         } else {
-            permissionDenied = true
+            deniedTarget = target
+        }
+    }
+
+    /** 已授权则直接拍照，否则先申请相机权限（目标留在状态里供权限回调使用）。 */
+    fun startCapture(target: ImageTarget) {
+        pendingTarget = target
+        failedTarget = null
+        deniedTarget = null
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            val uri = onCreateCaptureUri()
+            pendingCaptureUri = uri
+            captureLauncher.launch(uri)
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
@@ -477,7 +510,8 @@ private fun SettingsDialog(
                                     onBackgroundStyleChange(style.id)
                                     selectedStyleId = style.id
                                     backgroundSet = false
-                                    importFailed = false
+                                    failedTarget = null
+                                    deniedTarget = null
                                 },
                                 modifier = Modifier.weight(1f)
                             )
@@ -506,24 +540,17 @@ private fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = { backgroundGalleryLauncher.launch("image/*") }) {
-                        Text(stringResource(R.string.settings_background_choose))
-                    }
                     TextButton(
                         onClick = {
-                            if (ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.CAMERA
-                                ) == PackageManager.PERMISSION_GRANTED
-                            ) {
-                                val uri = onCreateCaptureUri()
-                                pendingCaptureUri = uri
-                                backgroundCameraLauncher.launch(uri)
-                            } else {
-                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                            }
+                            pendingTarget = ImageTarget.Background
+                            failedTarget = null
+                            deniedTarget = null
+                            galleryLauncher.launch("image/*")
                         }
                     ) {
+                        Text(stringResource(R.string.settings_background_choose))
+                    }
+                    TextButton(onClick = { startCapture(ImageTarget.Background) }) {
                         Text(stringResource(R.string.settings_background_capture))
                     }
                     TextButton(
@@ -532,22 +559,23 @@ private fun SettingsDialog(
                             onClearBackground()
                             backgroundSet = false
                             selectedStyleId = null
-                            importFailed = false
+                            failedTarget = null
+                            deniedTarget = null
                         }
                     ) {
                         Text(stringResource(R.string.settings_background_clear))
                     }
                 }
-                if (importFailed) {
+                if (failedTarget == ImageTarget.Background) {
                     Text(
                         text = importFailedText,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
-                if (permissionDenied) {
+                if (deniedTarget == ImageTarget.Background) {
                     Text(
-                        text = stringResource(R.string.settings_camera_permission_denied),
+                        text = permissionDeniedText,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -561,6 +589,67 @@ private fun SettingsDialog(
                 ) {
                     Text(stringResource(R.string.settings_background_scrim))
                     Text(text = (scrim * 100).roundToInt().toString() + "%")
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(stringResource(R.string.settings_wechat_qr))
+                    Text(
+                        stringResource(
+                            if (qrSet) {
+                                R.string.settings_wechat_qr_set
+                            } else {
+                                R.string.settings_wechat_qr_none
+                            }
+                        )
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = {
+                            pendingTarget = ImageTarget.WechatQr
+                            failedTarget = null
+                            deniedTarget = null
+                            galleryLauncher.launch("image/*")
+                        }
+                    ) {
+                        Text(stringResource(R.string.settings_wechat_qr_choose))
+                    }
+                    TextButton(onClick = { startCapture(ImageTarget.WechatQr) }) {
+                        Text(stringResource(R.string.settings_wechat_qr_capture))
+                    }
+                    TextButton(
+                        enabled = qrSet,
+                        onClick = {
+                            onClearWechatQr()
+                            qrSet = false
+                            failedTarget = null
+                            deniedTarget = null
+                        }
+                    ) {
+                        Text(stringResource(R.string.settings_wechat_qr_clear))
+                    }
+                }
+                if (failedTarget == ImageTarget.WechatQr) {
+                    Text(
+                        text = importFailedText,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                if (deniedTarget == ImageTarget.WechatQr) {
+                    Text(
+                        text = permissionDeniedText,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
                 Slider(
                     value = scrim,
@@ -819,4 +908,13 @@ private fun BackgroundStyleCard(
             maxLines = 1
         )
     }
+}
+
+/** 设置弹窗中需要通过「相册 / 拍照」导入图片的目标分区。 */
+private enum class ImageTarget {
+    /** 展示页背景图。 */
+    Background,
+
+    /** 展示页微信二维码。 */
+    WechatQr
 }

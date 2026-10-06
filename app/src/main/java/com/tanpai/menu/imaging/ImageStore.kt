@@ -33,13 +33,31 @@ class ImageStore(private val context: Context) {
         uri: Uri,
         maxEdge: Int = MAX_EDGE,
         jpegQuality: Int = JPEG_QUALITY
+    ): String? = importAs(uri, maxEdge, "jpg", Bitmap.CompressFormat.JPEG, jpegQuality)
+
+    /**
+     * 从 [uri] 无损导入图片（PNG）并保存，用于二维码等不能容忍压缩失真的图。
+     * [maxEdge] 为长边上限；解码失败返回 null。
+     */
+    suspend fun importLosslessFromUri(
+        uri: Uri,
+        maxEdge: Int = WECHAT_QR_MAX_EDGE
+    ): String? = importAs(uri, maxEdge, "png", Bitmap.CompressFormat.PNG, 100)
+
+    /** 解码 + 缩放 + 落盘的共用实现，[extension] 与 [format] 决定输出格式。 */
+    private suspend fun importAs(
+        uri: Uri,
+        maxEdge: Int,
+        extension: String,
+        format: Bitmap.CompressFormat,
+        quality: Int
     ): String? = withContext(Dispatchers.IO) {
         val bitmap = context.contentResolver.openInputStream(uri)
             ?.use { decodeScaled(it, maxEdge) }
             ?: return@withContext null
-        val target = File(imagesDir, "${UUID.randomUUID()}.jpg")
+        val target = File(imagesDir, "${UUID.randomUUID()}.$extension")
         target.outputStream().use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, out)
+            bitmap.compress(format, quality, out)
         }
         bitmap.recycle()
         "$IMAGES_DIR/${target.name}"
@@ -107,6 +125,8 @@ class ImageStore(private val context: Context) {
         const val BACKGROUND_MAX_EDGE = 2048
         /** 背景图 JPEG 压缩质量。 */
         const val BACKGROUND_JPEG_QUALITY = 85
+        /** 微信二维码长边上限：略大于放大浮层的显示边长，且无损输出。 */
+        const val WECHAT_QR_MAX_EDGE = 1024
         private val IMAGE_NAME =
             Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.(jpg|png)")
     }
