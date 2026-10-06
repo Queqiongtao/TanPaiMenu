@@ -123,6 +123,37 @@ class MenuRepository(
         }
     }
 
+    /** 读取启用中的分类（软删除不可见），供 REST 路径复用。 */
+    suspend fun categoryById(id: Long): Category? =
+        categoryDao.getById(id)?.takeIf { it.enabled }
+
+    /** 读取启用中的菜品（软删除不可见），供 REST 路径复用。 */
+    suspend fun dishById(id: Long): Dish? =
+        dishDao.getById(id)?.takeIf { it.enabled }
+
+    /** 启用中的分类 / 菜品列表（REST 列表与 `/state` 快照共用语义）。 */
+    suspend fun enabledCategories(): List<Category> = categoryDao.getAll().filter { it.enabled }
+
+    suspend fun enabledDishes(): List<Dish> = dishDao.getAll().filter { it.enabled }
+
+    /** 以实体整体更新分类（REST PATCH 用），走单写者事务并广播事件。 */
+    suspend fun saveCategory(category: Category): Category {
+        val fresh = category.copy(updatedAt = now())
+        return mutate {
+            categoryDao.update(fresh)
+            fresh to MenuChange.CategoryUpdated(bumpVersion(), fresh)
+        }
+    }
+
+    /** 以实体整体更新菜品（REST PATCH 用），走单写者事务并广播事件。 */
+    suspend fun saveDish(dish: Dish): Dish {
+        val fresh = dish.copy(updatedAt = now())
+        return mutate {
+            dishDao.update(fresh)
+            fresh to MenuChange.DishUpdated(bumpVersion(), fresh)
+        }
+    }
+
     suspend fun createCategory(name: String, sortOrder: Int): Long {
         val fresh = Category(name = name, sortOrder = sortOrder, updatedAt = now())
         return mutate {

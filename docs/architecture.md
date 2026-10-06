@@ -33,7 +33,7 @@ app/src/main/java/com/tanpai/menu/
 
 模块边界：`host` 与 `client` 不互相引用；跨模块只经 `net` / `data` 的接口与 DTO 交互。
 
-Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 新增 `net/protocol`、`host`（进行中）；`net`（客户端）、`client`、`ui/client` 为 Phase 3 预留。
+Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 已落地 `net/protocol` 与 `host`（M6 契约与单写者、M7 REST / WS 与配对信息，前台服务保活属 M8）；`net`（客户端）、`client`、`ui/client` 为 Phase 3 预留。
 
 ## 3. 关键流程与数据流
 
@@ -58,6 +58,7 @@ Phase 1 已实现的单机流程（含实现位置）：
 - 备份：`backup/BackupManager` 按 format 1 导出 `backup.json` + `images/`；导入先校验后整库覆盖（`MenuRepository.replaceAll`）。
 - 门禁：`ui/TanPaiMenuApp`（长按店名 2 秒 + PIN）、`data/PinManager`（失败锁定）、`kiosk/Kiosk`（沉浸 / 常亮 / 退出到桌面）。
 
+- 主机服务（M7）：`App.onCreate` 在 IO 协程内启动 `HostServer`（NanoWSD，端口从 `SettingsStore.serverPort` 起顺延 8080→8082）→ `host/HostApi` 做 Bearer 鉴权 / `requestId` 幂等 / 参数校验 → `host/RepositoryMenuBackend` 走 `MenuRepository` 单写者事务 → 事务提交事件由 `host/WsHub` 广播给各 WS 连接（首帧 `snapshot`，增量 `dish.*` / `category.*` / `device.*`）；图片走 `POST /images`（multipart，魔数判型，长边 ≤1280 JPEG）与 `GET /images/{name}`；设备注册表在 `connected_device`（`/devices`，`lastSeen` > 30s 视为离线）；配对信息（`http://<ip>:<port>`、`pairToken`、zxing 二维码）在管理页设置弹窗展示并可更换。容器差异：请求体不依赖 NanoHTTPD `parseBody`，按 `Content-Length` 读原始字节并显式 UTF-8 解码（否则中文乱码、且 PATCH 拿不到体）；4401 关闭帧手工构造。见 `docs/design/0015-主机服务接口实现.md`。
 ## 4. 接口与数据模型
 
 - 契约细节：`docs/design/0001-菜单数据模型与接口契约.md`。
@@ -113,3 +114,4 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-06 | 价格胶囊宽度改为内容自适应（96–128dp、下限 96dp），价格列仍定宽 128dp 占位 | 0012 |
 | 2026-10-06 | 展示页版式规则化（列数 1–4 + 单行/两行卡片自动分档）、方向锁 sensorLandscape → fullSensor、管理页窄屏侧栏与菜品行兜底 | 0013 |
 | 2026-10-06 | 内置 12 张默认菜品图（`assets/dishes`，512 JPEG），首启与恢复默认菜单导入 `filesDir/images` 并写入 `Dish.imagePath` | 0014 |
+| 2026-10-06 | M7 落地：局域网 REST /api/v1/* + WS /ws、Bearer 鉴权与幂等、设备注册表与库 1→2 迁移、开机自启与管理页配对信息（地址 / 配对码 / 二维码 / 更换） | 0015、0002 |

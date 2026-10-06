@@ -84,6 +84,37 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_AUTOSTART, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTOSTART, value).apply()
 
+    /**
+     * 主机配对码：客户端请求需带 `Authorization: Bearer <pairToken>`。
+     * 首次读取时生成 32 字节随机十六进制并落盘，更换后旧码立即失效。
+     */
+    var pairToken: String
+        get() {
+            prefs.getString(KEY_PAIR_TOKEN, null)?.takeIf { it.isNotBlank() }?.let { return it }
+            return generatePairToken()
+        }
+        set(value) = prefs.edit().putString(KEY_PAIR_TOKEN, value).apply()
+
+    /** 主机服务端口偏好（1024–65535），实际绑定端口见 `HostServer.port`。 */
+    var serverPort: Int
+        get() = prefs.getInt(KEY_SERVER_PORT, DEFAULT_SERVER_PORT)
+            .coerceIn(MIN_SERVER_PORT, MAX_SERVER_PORT)
+        set(value) = prefs
+            .edit()
+            .putInt(KEY_SERVER_PORT, value.coerceIn(MIN_SERVER_PORT, MAX_SERVER_PORT))
+            .apply()
+
+    /** 重新生成配对码并落盘，返回新码；调用方负责断开现有连接。 */
+    fun regeneratePairToken(): String = generatePairToken().also { pairToken = it }
+
+    private fun generatePairToken(): String {
+        val bytes = ByteArray(PAIR_TOKEN_BYTES)
+        java.security.SecureRandom().nextBytes(bytes)
+        val token = bytes.joinToString(separator = "") { "%02x".format(it) }
+        prefs.edit().putString(KEY_PAIR_TOKEN, token).apply()
+        return token
+    }
+
     val deviceId: String
         get() {
             prefs.getString(KEY_DEVICE_ID, null)?.let { return it }
@@ -119,5 +150,13 @@ class SettingsStore(context: Context) {
         /** 背景蒙版不透明度上限（百分比），过高会完全遮住背景图。 */
         const val MAX_BACKGROUND_SCRIM_PERCENT = 80
         const val KEY_DEVICE_ID = "device_id"
+        const val KEY_PAIR_TOKEN = "pair_token"
+        const val KEY_SERVER_PORT = "server_port"
+        /** 配对码随机字节数（十六进制后 64 字符）。 */
+        const val PAIR_TOKEN_BYTES = 32
+        /** 主机服务默认端口。 */
+        const val DEFAULT_SERVER_PORT = 8080
+        const val MIN_SERVER_PORT = 1024
+        const val MAX_SERVER_PORT = 65535
     }
 }

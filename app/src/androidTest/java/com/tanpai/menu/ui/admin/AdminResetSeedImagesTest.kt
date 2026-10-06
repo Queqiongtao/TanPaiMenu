@@ -8,6 +8,7 @@ import com.tanpai.menu.backup.BackupManager
 import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.data.db.TpDatabase
+import com.tanpai.menu.host.HostStatusProvider
 import com.tanpai.menu.imaging.ImageStore
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -54,11 +55,13 @@ class AdminResetSeedImagesTest {
     @Test
     fun resetToDefaultMenuKeepsSeedImagesOnDisk() = runTest {
         repository.seedIfEmpty()
+        val settings = SettingsStore(context)
         val viewModel = AdminViewModel(
             repository,
-            SettingsStore(context),
+            settings,
             store,
-            BackupManager(context, repository, store)
+            BackupManager(context, repository, store),
+            HostStatusProvider(context, settings) { null }
         )
 
         viewModel.resetToDefaultMenu()

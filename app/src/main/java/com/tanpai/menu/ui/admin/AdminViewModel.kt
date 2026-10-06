@@ -1,5 +1,6 @@
 package com.tanpai.menu.ui.admin
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +15,7 @@ import com.tanpai.menu.data.MenuSnapshot
 import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.SellResult
+import com.tanpai.menu.host.HostStatusProvider
 import com.tanpai.menu.imaging.ImageStore
 import com.tanpai.menu.logging.TpLog
 import com.tanpai.menu.ui.theme.BackgroundStyles
@@ -28,10 +30,27 @@ class AdminViewModel(
     private val repository: MenuRepository,
     private val settings: SettingsStore,
     private val imageStore: ImageStore,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val hostStatus: HostStatusProvider
 ) : ViewModel() {
 
     val deviceId: String = settings.deviceId
+
+    /** 主机服务是否在监听；由 [refreshHostInfo] 读取。 */
+    var hostRunning by mutableStateOf(false)
+        private set
+
+    /** 局域网访问地址；服务未启动或无 Wi-Fi 时为 null。 */
+    var hostAddress by mutableStateOf<String?>(null)
+        private set
+
+    /** 当前配对码。 */
+    var pairToken by mutableStateOf(settings.pairToken)
+        private set
+
+    /** 配对二维码位图；地址不可用或编码失败时为 null。 */
+    var hostQrBitmap by mutableStateOf<Bitmap?>(null)
+        private set
 
     var storeName by mutableStateOf(settings.displayStoreName)
         private set
@@ -97,6 +116,21 @@ class AdminViewModel(
     fun updateBackgroundScrimPercent(value: Int) {
         backgroundScrimPercent = value
         settings.backgroundScrimPercent = value
+    }
+
+    /** 刷新主机运行状态与配对信息（设置弹窗打开时调用）。 */
+    fun refreshHostInfo() {
+        hostRunning = hostStatus.running
+        hostAddress = hostStatus.address()
+        pairToken = hostStatus.pairToken
+        hostQrBitmap = hostStatus.qrBitmap(HOST_QR_SIZE_PX)
+    }
+
+    /** 更换配对码并断开现有客户端连接；二维码随之更新。 */
+    fun regeneratePairToken() {
+        pairToken = hostStatus.regeneratePairToken()
+        hostQrBitmap = hostStatus.qrBitmap(HOST_QR_SIZE_PX)
+        TpLog.i(TAG, "已更换配对码")
     }
 
     /**
@@ -242,15 +276,19 @@ class AdminViewModel(
     companion object {
         private const val TAG = "admin"
 
+        /** 配对二维码边长（像素）：约等于 180dp 在 T10 上的显示尺寸，留 2 倍余量。 */
+        private const val HOST_QR_SIZE_PX = 480
+
         fun factory(
             repository: MenuRepository,
             settings: SettingsStore,
             imageStore: ImageStore,
-            backupManager: BackupManager
+            backupManager: BackupManager,
+            hostStatus: HostStatusProvider
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                AdminViewModel(repository, settings, imageStore, backupManager) as T
+                AdminViewModel(repository, settings, imageStore, backupManager, hostStatus) as T
         }
     }
 }

@@ -60,3 +60,17 @@ data class AppMeta(
     @PrimaryKey val key: String,
     val value: String
 )
+
+/**
+ * 已连接的客户端设备（`docs/design/0015` 第 2.6 节）。
+ *
+ * `id` 由客户端在 WS 连接参数中提供；[lastSeen] 为最近一次活跃时间（UTC epoch 毫秒），
+ * 超过 30s 未更新即视为离线。
+ */
+@Entity(tableName = "connected_device")
+data class ConnectedDevice(
+    @PrimaryKey val id: String,
+    val name: String,
+    val role: String,
+    val lastSeen: Long
+)

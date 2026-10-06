@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.util.Locale
@@ -43,6 +44,15 @@ class ImageStore(private val context: Context) {
         uri: Uri,
         maxEdge: Int = WECHAT_QR_MAX_EDGE
     ): String? = importAs(uri, maxEdge, "png", Bitmap.CompressFormat.PNG, 100)
+
+    /**
+     * 从内存字节导入图片（`POST /images` 上传路径），复用「采样缩放 → 长边 ≤1280 → JPEG 质量 80」，
+     * 返回相对路径；解码失败返回 null。
+     */
+    suspend fun importFromBytes(bytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        val bitmap = decodeScaled(ByteArrayInputStream(bytes), MAX_EDGE) ?: return@withContext null
+        saveBitmap(bitmap, "jpg", Bitmap.CompressFormat.JPEG, JPEG_QUALITY)
+    }
 
     /**
      * 导入内置默认菜品图：从 `assets/[SEED_ASSETS_DIR]` 读取并压缩保存，返回相对路径。

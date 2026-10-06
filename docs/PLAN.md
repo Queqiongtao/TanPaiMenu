@@ -1,6 +1,6 @@
 # TanPaiMenu 摆摊电子菜单 —— 开发计划
 
-> 版本：v1.3 ｜ 状态：Phase 1 已完成，待进入 Phase 2 ｜ 更新日期：2026-10-05
+> 版本：v1.7 ｜ 状态：Phase 2 进行中（M6、M7 已完成）｜ 更新日期：2026-10-06
 
 修订历史：
 
@@ -12,6 +12,7 @@
 | v1.4 | 2026-10-05 | Phase 2 启动：主机侧设计定稿（0002 转已确认），拆解 M6-M9 子阶段。 |
 | v1.5 | 2026-10-05 | 展示页紧凑化（一屏 12 道）与默认菜单改写为大金馄饨 12 道；新增 0006 设计文档。 |
 | v1.6 | 2026-10-06 | 展示页默认喜庆红背景（蒙版 25%）、整数价格省略小数位、内置默认微信二维码与设置弹窗排版修正；新增 0011 设计文档。 |
+| v1.7 | 2026-10-06 | M7 完成：局域网 REST / WS、Bearer 鉴权与幂等、设备注册表与库 1→2 迁移、开机自启与管理页配对信息；请求体按 UTF-8 显式解码修复中文乱码；新增 0015 设计文档。 |
 
 ## 1. 项目概述
 
@@ -224,8 +225,8 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 | 子阶段 | 内容 | 状态 |
 | --- | --- | --- |
 | M6 | 契约 DTO / 映射 / ISO-8601（`net/protocol`）、单写者锁与 `MenuChange` 事件流（`data`） | 已完成 |
-| M7 | NanoHTTPD REST + WS、鉴权与幂等缓存、设备注册表与库迁移 | 未开始 |
-| M8 | 前台服务保活、配对页（IP / 端口 / token / 二维码）、在线设备列表 | 未开始 |
+| M7 | NanoHTTPD REST + WS、鉴权与幂等缓存、设备注册表与库迁移 | 已完成 |
+| M8 | 前台服务保活、在线设备列表（配对信息展示已随 M7 交付） | 未开始 |
 | M9 | JVM 契约测试与真机多端验收、文档回填 | 未开始 |
 
 **M6 实现与验证（2026-10-05）**：
@@ -233,6 +234,15 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - 契约层 `net/protocol/`：`Contract.kt`、`Iso8601.kt`、`Mapping.kt`。
 - 单写者 `data/MenuRepository.kt`（`writeMutex`）与事件流 `data/MenuChange.kt`（提交后按序发出，回滚不发）。
 - 验证：JVM 单测 36 项通过；真机 Teclast T10 / API 24 仪表测试 11 项通过（含 10 并发卖出串行化）。
+**M7 实现与验证（2026-10-06）**：
+
+- 主机服务 `host/`：`HostApi`（路由 / 鉴权 / 幂等 / 校验 / 错误码）、`HostServer`（NanoWSD HTTP + WS 适配、端口顺延）、`WsHub`（连接注册表与广播）、`RepositoryMenuBackend`、`HostInfo`、`HostStatus`。
+- 数据与设置：`connected_device` 表 + `DeviceDao`、库 1 → 2 迁移；`SettingsStore.pairToken` / `serverPort`；`ImageStore.importFromBytes`。
+- 装配与 UI：`App.onCreate` 自启服务并写日志；管理页设置弹窗「手机控制端」显示地址、配对码、二维码与「更换配对码」。
+- 依赖：`nanohttpd` + `nanohttpd-websocket` 2.3.1、`zxing core` 3.5.3；新增 `INTERNET` / `ACCESS_NETWORK_STATE` / `ACCESS_WIFI_STATE` 权限。
+- 验证：JVM 单测 86 项通过（新增 29 项）；平板仪表测试 41 项通过（新增 `HostServerTest` 9、迁移 1）。
+
+**文档产出**：`docs/design/0015-主机服务接口实现.md`；更新 `0001`（WS 连接参数）、`0002`（M7 实现位置）与 `docs/architecture.md`。
 
 **文档产出**：`docs/design/0002-局域网配对与同步.md`；更新 `docs/architecture.md` 关键流程与数据流章节。
 

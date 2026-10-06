@@ -1,10 +1,12 @@
 package com.tanpai.menu.ui.admin
 
 import android.Manifest
+import android.graphics.Bitmap
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -82,6 +85,9 @@ private const val SidebarWidthFraction = 0.4f
 /** 窄于该宽度时菜品行改为「详情 + 操作」两行，避免按钮被裁切。 */
 private val NarrowDishRowWidth = 480.dp
 
+/** 设置弹窗中配对二维码的显示边长。 */
+private val HostQrSize = 180.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
@@ -106,6 +112,11 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
     var editingDish by remember { mutableStateOf<Dish?>(null) }
     var deletingDish by remember { mutableStateOf<Dish?>(null) }
     var showSettings by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showSettings) {
+        if (showSettings) viewModel.refreshHostInfo()
+    }
+
     var message by remember { mutableStateOf<String?>(null) }
 
     val errSoldOut = stringResource(R.string.admin_err_sold_out)
@@ -310,6 +321,10 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             backgroundStyleId = viewModel.backgroundStyleId,
             backgroundScrimPercent = viewModel.backgroundScrimPercent,
             wechatQrImagePath = viewModel.wechatQrImagePath,
+            hostRunning = viewModel.hostRunning,
+            hostAddress = viewModel.hostAddress,
+            pairToken = viewModel.pairToken,
+            hostQrBitmap = viewModel.hostQrBitmap,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAutostartChange = { viewModel.updateAutostart(it) },
             onShowStockHintChange = { viewModel.updateShowStockHint(it) },
@@ -321,6 +336,7 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             onClearBackground = { viewModel.clearBackground() },
             onImportWechatQr = { uri -> viewModel.applyWechatQr(uri) },
             onClearWechatQr = { viewModel.clearWechatQr() },
+            onRegeneratePairToken = { viewModel.regeneratePairToken() },
             resetDone = resetDone,
             onResetSeed = { viewModel.resetToDefaultMenu() },
             onClearResetDone = { viewModel.clearResetDone() },
@@ -343,6 +359,10 @@ private fun SettingsDialog(
     backgroundStyleId: String?,
     backgroundScrimPercent: Int,
     wechatQrImagePath: String?,
+    hostRunning: Boolean,
+    hostAddress: String?,
+    pairToken: String,
+    hostQrBitmap: Bitmap?,
     onStoreNameChange: (String) -> Unit,
     onAutostartChange: (Boolean) -> Unit,
     onShowStockHintChange: (Boolean) -> Unit,
@@ -354,6 +374,7 @@ private fun SettingsDialog(
     onClearBackground: () -> Unit,
     onImportWechatQr: suspend (Uri) -> Boolean,
     onClearWechatQr: () -> Unit,
+    onRegeneratePairToken: () -> Unit,
     resetDone: Boolean,
     onResetSeed: () -> Unit,
     onClearResetDone: () -> Unit,
@@ -379,6 +400,7 @@ private fun SettingsDialog(
     var deniedTarget by remember { mutableStateOf<ImageTarget?>(null) }
     var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
     var pendingTarget by remember { mutableStateOf<ImageTarget?>(null) }
+    var confirmRegenerateToken by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val importFailedText = stringResource(R.string.settings_background_import_failed)
     val permissionDeniedText = stringResource(R.string.settings_camera_permission_denied)
@@ -672,9 +694,51 @@ private fun SettingsDialog(
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
+                Text(
+                    text = stringResource(R.string.settings_host_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+                if (hostRunning) {
+                    Text(
+                        text = stringResource(R.string.settings_host_running),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = hostAddress ?: stringResource(R.string.settings_host_no_wifi),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_host_pair_code, pairToken),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_host_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    hostQrBitmap?.let { qr ->
+                        Image(
+                            bitmap = qr.asImageBitmap(),
+                            contentDescription = stringResource(R.string.settings_host_title),
+                            modifier = Modifier
+                                .padding(top = 8.dp)
+                                .size(HostQrSize)
+                        )
+                    }
+                    TextButton(onClick = { confirmRegenerateToken = true }) {
+                        Text(stringResource(R.string.settings_host_regenerate))
+                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.settings_host_stopped),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 TextButton(
-                    onClick = { openHomeSettings(context) },
-                    modifier = Modifier.padding(top = 8.dp)
+                    onClick = { openHomeSettings(context) },                    modifier = Modifier.padding(top = 8.dp)
                 ) {
                     Text(stringResource(R.string.settings_set_home))
                 }
@@ -743,8 +807,19 @@ private fun SettingsDialog(
         )
     }
 
-    if (confirmReset) {
+    if (confirmRegenerateToken) {
         ConfirmDialog(
+            title = stringResource(R.string.settings_host_regenerate),
+            text = stringResource(R.string.settings_host_regenerate_confirm),
+            onConfirm = {
+                confirmRegenerateToken = false
+                onRegeneratePairToken()
+            },
+            onDismiss = { confirmRegenerateToken = false }
+        )
+    }
+
+    if (confirmReset) {        ConfirmDialog(
             title = stringResource(R.string.settings_reset_seed),
             text = stringResource(R.string.settings_reset_seed_confirm),
             onConfirm = {
