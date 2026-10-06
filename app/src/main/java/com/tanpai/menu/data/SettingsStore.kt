@@ -29,6 +29,23 @@ class SettingsStore(context: Context) {
             .putInt(KEY_CARD_ALPHA, value.coerceIn(MIN_CARD_ALPHA_PERCENT, 100))
             .apply()
 
+    /** 展示页背景图相对路径（images/xxx.jpg），null 表示未设置。 */
+    var backgroundImagePath: String?
+        get() = prefs.getString(KEY_BACKGROUND_IMAGE, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit().putString(KEY_BACKGROUND_IMAGE, value).apply()
+
+    /** 展示页背景图上的白色蒙版不透明度（百分比，范围 0..80）。 */
+    var backgroundScrimPercent: Int
+        get() = prefs.getInt(KEY_BACKGROUND_SCRIM, DEFAULT_BACKGROUND_SCRIM_PERCENT)
+            .coerceIn(MIN_BACKGROUND_SCRIM_PERCENT, MAX_BACKGROUND_SCRIM_PERCENT)
+        set(value) = prefs
+            .edit()
+            .putInt(
+                KEY_BACKGROUND_SCRIM,
+                value.coerceIn(MIN_BACKGROUND_SCRIM_PERCENT, MAX_BACKGROUND_SCRIM_PERCENT)
+            )
+            .apply()
+
     var adminPinHash: String?
         get() = prefs.getString(KEY_PIN_HASH, null)
         set(value) = prefs.edit().putString(KEY_PIN_HASH, value).apply()
@@ -73,6 +90,14 @@ class SettingsStore(context: Context) {
         const val DEFAULT_CARD_ALPHA_PERCENT = 75
         /** 卡片底不透明度下限（百分比），避免卡片完全隐形。 */
         const val MIN_CARD_ALPHA_PERCENT = 20
+        const val KEY_BACKGROUND_IMAGE = "background_image"
+        const val KEY_BACKGROUND_SCRIM = "background_scrim"
+        /** 背景蒙版默认不透明度（百分比）。 */
+        const val DEFAULT_BACKGROUND_SCRIM_PERCENT = 30
+        /** 背景蒙版不透明度下限（百分比）。 */
+        const val MIN_BACKGROUND_SCRIM_PERCENT = 0
+        /** 背景蒙版不透明度上限（百分比），过高会完全遮住背景图。 */
+        const val MAX_BACKGROUND_SCRIM_PERCENT = 80
         const val KEY_DEVICE_ID = "device_id"
     }
 }

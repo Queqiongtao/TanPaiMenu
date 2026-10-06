@@ -102,6 +102,8 @@ fun DisplayScreen(
     storeName: String,
     showStockHint: Boolean,
     cardAlpha: Float = 1f,
+    backgroundImagePath: String? = null,
+    backgroundScrim: Float = 0.3f,
     onRequestAdmin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -120,24 +122,46 @@ fun DisplayScreen(
         menu.dishes.filter { it.categoryId == selectedCategoryId }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(ContentPadding)
-    ) {
-        DisplayTopBar(
-            storeName = storeName,
-            categories = categories,
-            selectedCategoryId = selectedCategoryId,
-            onSelect = { selectedCategoryId = it },
-            onRequestAdmin = onRequestAdmin
-        )
-        Spacer(modifier = Modifier.height(CardSpacing))
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            when {
-                categories.isEmpty() -> CenterHint(stringResource(R.string.display_no_categories))
-                dishes.isEmpty() -> CenterHint(stringResource(R.string.display_no_dishes))
-                else -> DishGrid(dishes = dishes, showStockHint = showStockHint, cardAlpha = cardAlpha)
+    val context = LocalContext.current
+    val backgroundFile = backgroundImagePath?.let { File(context.filesDir, it) }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        if (backgroundFile != null && backgroundFile.exists()) {
+            AsyncImage(
+                model = backgroundFile,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = backgroundScrim))
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(ContentPadding)
+        ) {
+            DisplayTopBar(
+                storeName = storeName,
+                categories = categories,
+                selectedCategoryId = selectedCategoryId,
+                onSelect = { selectedCategoryId = it },
+                onRequestAdmin = onRequestAdmin
+            )
+            Spacer(modifier = Modifier.height(CardSpacing))
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                when {
+                    categories.isEmpty() -> CenterHint(stringResource(R.string.display_no_categories))
+                    dishes.isEmpty() -> CenterHint(stringResource(R.string.display_no_dishes))
+                    else -> DishGrid(
+                        dishes = dishes,
+                        showStockHint = showStockHint,
+                        cardAlpha = cardAlpha
+                    )
+                }
             }
         }
     }

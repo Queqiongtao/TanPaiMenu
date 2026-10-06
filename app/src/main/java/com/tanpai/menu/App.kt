@@ -38,7 +38,9 @@ class App : Application() {
         appScope.launch {
             runCatching {
                 container.menuRepository.seedIfEmpty()
-                val removed = container.imageStore.deleteOrphans(container.menuRepository.allImagePaths())
+                val referenced = container.menuRepository.allImagePaths() +
+                    setOfNotNull(container.settingsStore.backgroundImagePath)
+                val removed = container.imageStore.deleteOrphans(referenced)
                 if (removed > 0) TpLog.i("image", "启动清理孤儿图片 $removed 张")
             }.onFailure { TpLog.e("app", "启动初始化失败", it) }
         }

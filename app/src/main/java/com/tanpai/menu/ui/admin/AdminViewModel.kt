@@ -44,6 +44,12 @@ class AdminViewModel(
     var cardAlphaPercent by mutableStateOf(settings.cardAlphaPercent)
         private set
 
+    var backgroundImagePath by mutableStateOf(settings.backgroundImagePath)
+        private set
+
+    var backgroundScrimPercent by mutableStateOf(settings.backgroundScrimPercent)
+        private set
+
     val menu: StateFlow<MenuSnapshot> = repository.observeMenu()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MenuSnapshot())
 
@@ -73,12 +79,41 @@ class AdminViewModel(
         settings.cardAlphaPercent = value
     }
 
+    fun updateBackgroundScrimPercent(value: Int) {
+        backgroundScrimPercent = value
+        settings.backgroundScrimPercent = value
+    }
+
+    /** 导入并保存展示页背景图，成功后删除旧图；返回是否导入成功。 */
+    suspend fun applyBackgroundImage(uri: Uri): Boolean {
+        val path = imageStore.importFromUri(
+            uri,
+            maxEdge = ImageStore.BACKGROUND_MAX_EDGE,
+            jpegQuality = ImageStore.BACKGROUND_JPEG_QUALITY
+        ) ?: return false
+        val previous = backgroundImagePath
+        backgroundImagePath = path
+        settings.backgroundImagePath = path
+        if (previous != null && previous != path) imageStore.delete(previous)
+        TpLog.i(TAG, "已更新展示页背景图")
+        return true
+    }
+
+    /** 清除展示页背景图并删除对应文件。 */
+    fun clearBackgroundImage() {
+        val previous = backgroundImagePath
+        backgroundImagePath = null
+        settings.backgroundImagePath = null
+        imageStore.delete(previous)
+        TpLog.i(TAG, "已清除展示页背景图")
+    }
+
     /** 清空菜单与图片并写回默认菜单，用于「恢复默认菜单」。 */
     fun resetToDefaultMenu() {
         viewModelScope.launch {
             runCatching {
                 repository.resetToSeedMenu()
-                imageStore.deleteOrphans(emptySet())
+                imageStore.deleteOrphans(setOfNotNull(backgroundImagePath))
             }.onSuccess {
                 _resetDone.value = true
                 TpLog.i(TAG, "已恢复默认菜单")

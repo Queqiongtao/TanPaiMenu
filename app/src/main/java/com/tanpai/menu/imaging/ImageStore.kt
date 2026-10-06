@@ -25,13 +25,21 @@ class ImageStore(private val context: Context) {
         return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 
-    suspend fun importFromUri(uri: Uri): String? = withContext(Dispatchers.IO) {
+    /**
+     * 从 [uri] 导入图片并压缩保存，返回相对路径；解码失败返回 null。
+     * [maxEdge] 为长边上限，[jpegQuality] 为 JPEG 压缩质量，默认沿用菜品缩略图参数。
+     */
+    suspend fun importFromUri(
+        uri: Uri,
+        maxEdge: Int = MAX_EDGE,
+        jpegQuality: Int = JPEG_QUALITY
+    ): String? = withContext(Dispatchers.IO) {
         val bitmap = context.contentResolver.openInputStream(uri)
-            ?.use { decodeScaled(it) }
+            ?.use { decodeScaled(it, maxEdge) }
             ?: return@withContext null
         val target = File(imagesDir, "${UUID.randomUUID()}.jpg")
         target.outputStream().use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, out)
         }
         bitmap.recycle()
         "$IMAGES_DIR/${target.name}"
@@ -61,15 +69,15 @@ class ImageStore(private val context: Context) {
         removed
     }
 
-    private fun decodeScaled(input: InputStream): Bitmap? {
+    private fun decodeScaled(input: InputStream, maxEdge: Int): Bitmap? {
         val bytes = input.readBytes()
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
         var sampleSize = 1
-        while (bounds.outWidth / sampleSize > MAX_EDGE * 2 ||
-            bounds.outHeight / sampleSize > MAX_EDGE * 2
+        while (bounds.outWidth / sampleSize > maxEdge * 2 ||
+            bounds.outHeight / sampleSize > maxEdge * 2
         ) {
             sampleSize *= 2
         }
@@ -77,9 +85,9 @@ class ImageStore(private val context: Context) {
         val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
 
         val longEdge = maxOf(decoded.width, decoded.height)
-        if (longEdge <= MAX_EDGE) return decoded
+        if (longEdge <= maxEdge) return decoded
 
-        val scale = MAX_EDGE.toFloat() / longEdge
+        val scale = maxEdge.toFloat() / longEdge
         val scaled = Bitmap.createScaledBitmap(
             decoded,
             (decoded.width * scale).toInt(),
@@ -95,6 +103,10 @@ class ImageStore(private val context: Context) {
         private const val CAPTURE_DIR = "capture"
         private const val MAX_EDGE = 1280
         private const val JPEG_QUALITY = 80
+        /** 背景图长边上限，明显高于缩略图以适配平板整屏铺满。 */
+        const val BACKGROUND_MAX_EDGE = 2048
+        /** 背景图 JPEG 压缩质量。 */
+        const val BACKGROUND_JPEG_QUALITY = 85
         private val IMAGE_NAME =
             Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.(jpg|png)")
     }

@@ -1,5 +1,7 @@
 package com.tanpai.menu.ui.admin
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.tanpai.menu.R
 import com.tanpai.menu.backup.BackupFailure
 import com.tanpai.menu.backup.BackupResult
@@ -54,6 +58,7 @@ import com.tanpai.menu.domain.SellError
 import com.tanpai.menu.domain.SellResult
 import com.tanpai.menu.kiosk.exitToHome
 import com.tanpai.menu.kiosk.openHomeSettings
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -277,10 +282,16 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             autostart = viewModel.autostartEnabled,
             showStockHint = viewModel.showStockHint,
             cardAlphaPercent = viewModel.cardAlphaPercent,
+            backgroundImagePath = viewModel.backgroundImagePath,
+            backgroundScrimPercent = viewModel.backgroundScrimPercent,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAutostartChange = { viewModel.updateAutostart(it) },
             onShowStockHintChange = { viewModel.updateShowStockHint(it) },
             onCardAlphaChange = { viewModel.updateCardAlphaPercent(it) },
+            onBackgroundScrimChange = { viewModel.updateBackgroundScrimPercent(it) },
+            onImportBackgroundImage = { uri -> viewModel.applyBackgroundImage(uri) },
+            onCreateCaptureUri = { viewModel.createCaptureUri() },
+            onClearBackgroundImage = { viewModel.clearBackgroundImage() },
             resetDone = resetDone,
             onResetSeed = { viewModel.resetToDefaultMenu() },
             onClearResetDone = { viewModel.clearResetDone() },
@@ -299,10 +310,16 @@ private fun SettingsDialog(
     autostart: Boolean,
     showStockHint: Boolean,
     cardAlphaPercent: Int,
+    backgroundImagePath: String?,
+    backgroundScrimPercent: Int,
     onStoreNameChange: (String) -> Unit,
     onAutostartChange: (Boolean) -> Unit,
     onShowStockHintChange: (Boolean) -> Unit,
     onCardAlphaChange: (Int) -> Unit,
+    onBackgroundScrimChange: (Int) -> Unit,
+    onImportBackgroundImage: suspend (Uri) -> Boolean,
+    onCreateCaptureUri: () -> Uri,
+    onClearBackgroundImage: () -> Unit,
     resetDone: Boolean,
     onResetSeed: () -> Unit,
     onClearResetDone: () -> Unit,
@@ -320,6 +337,13 @@ private fun SettingsDialog(
     var confirmExit by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<Uri?>(null) }
+    var scrim by remember { mutableStateOf(backgroundScrimPercent / 100f) }
+    var backgroundSet by remember { mutableStateOf(backgroundImagePath != null) }
+    var importFailed by remember { mutableStateOf(false) }
+    var permissionDenied by remember { mutableStateOf(false) }
+    var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
+    val scope = rememberCoroutineScope()
+    val importFailedText = stringResource(R.string.settings_background_import_failed)
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -327,6 +351,47 @@ private fun SettingsDialog(
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri -> pendingImport = uri }
+
+    val backgroundGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                if (onImportBackgroundImage(uri)) {
+                    backgroundSet = true
+                    importFailed = false
+                } else {
+                    importFailed = true
+                }
+            }
+        }
+    }
+    val backgroundCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val uri = pendingCaptureUri
+        if (success && uri != null) {
+            scope.launch {
+                if (onImportBackgroundImage(uri)) {
+                    backgroundSet = true
+                    importFailed = false
+                } else {
+                    importFailed = true
+                }
+            }
+        }
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val uri = onCreateCaptureUri()
+            pendingCaptureUri = uri
+            backgroundCameraLauncher.launch(uri)
+        } else {
+            permissionDenied = true
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -374,6 +439,90 @@ private fun SettingsDialog(
                     onValueChange = { cardAlpha = it },
                     onValueChangeFinished = { onCardAlphaChange((cardAlpha * 100).roundToInt()) },
                     valueRange = 0.2f..1f,
+                    steps = 15
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(stringResource(R.string.settings_background_image))
+                    Text(
+                        stringResource(
+                            if (backgroundSet) {
+                                R.string.settings_background_set
+                            } else {
+                                R.string.settings_background_none
+                            }
+                        )
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = { backgroundGalleryLauncher.launch("image/*") }) {
+                        Text(stringResource(R.string.settings_background_choose))
+                    }
+                    TextButton(
+                        onClick = {
+                            if (ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.CAMERA
+                                ) == PackageManager.PERMISSION_GRANTED
+                            ) {
+                                val uri = onCreateCaptureUri()
+                                pendingCaptureUri = uri
+                                backgroundCameraLauncher.launch(uri)
+                            } else {
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            }
+                        }
+                    ) {
+                        Text(stringResource(R.string.settings_background_capture))
+                    }
+                    TextButton(
+                        enabled = backgroundSet,
+                        onClick = {
+                            onClearBackgroundImage()
+                            backgroundSet = false
+                            importFailed = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.settings_background_clear))
+                    }
+                }
+                if (importFailed) {
+                    Text(
+                        text = importFailedText,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                if (permissionDenied) {
+                    Text(
+                        text = stringResource(R.string.settings_camera_permission_denied),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(stringResource(R.string.settings_background_scrim))
+                    Text(text = (scrim * 100).roundToInt().toString() + "%")
+                }
+                Slider(
+                    value = scrim,
+                    onValueChange = { scrim = it },
+                    onValueChangeFinished = { onBackgroundScrimChange((scrim * 100).roundToInt()) },
+                    valueRange = 0f..0.8f,
                     steps = 15
                 )
                 TextButton(

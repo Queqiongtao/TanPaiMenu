@@ -66,6 +66,15 @@
     <string name="display_in_stock">有货</string>
     <string name="settings_show_stock_hint">显示是否有货</string>
     <string name="settings_card_alpha">菜品卡片不透明度</string>
+    <string name="settings_background_image">背景图</string>
+    <string name="settings_background_choose">选择图片</string>
+    <string name="settings_background_capture">拍照</string>
+    <string name="settings_background_clear">清除</string>
+    <string name="settings_background_none">未设置</string>
+    <string name="settings_background_set">已设置</string>
+    <string name="settings_background_scrim">背景蒙版不透明度</string>
+    <string name="settings_background_import_failed">背景图读取失败，请重新选择</string>
+    <string name="settings_camera_permission_denied">未授予相机权限，无法拍照</string>
     <string name="settings_reset_seed">恢复默认菜单</string>
     <string name="settings_reset_seed_confirm">将清除当前全部菜单与图片，并写入默认菜单（大金馄饨 12 道），确定继续？</string>
     <string name="settings_reset_seed_done">已恢复默认菜单</string>
