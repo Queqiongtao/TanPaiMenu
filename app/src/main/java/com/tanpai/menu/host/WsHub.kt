@@ -28,8 +28,14 @@ class WsHub {
         val name: String
         val role: String
 
+        /** 连接建立时间（System.currentTimeMillis()），用于「已连接多久」展示。 */
+        val connectedAt: Long
+
         /** 推送一个文本帧；连接已关闭或发送失败返回 false。 */
         fun push(frame: String): Boolean
+
+        /** 发送一个 WS ping；连接已关闭或发送失败返回 false。 */
+        fun sendPing(): Boolean
 
         /** 主动断开并携带关闭码（`4401` 表示配对码失效）。 */
         fun close(code: Int, reason: String)
@@ -47,6 +53,9 @@ class WsHub {
 
     fun size(): Int = connections.size
 
+    /** 当前在线连接快照（按连接时间升序）；设备列表只读使用。 */
+    fun connections(): List<Connection> = connections.sortedBy { it.connectedAt }
+
     /**
      * 广播事件帧；[except] 用于排除触发者自身（如新连接不必收到自己的 `device.joined`）。
      * 发送失败的连接立即移除，返回成功发送的连接数。
@@ -59,6 +68,20 @@ class WsHub {
             if (connection.push(frame)) sent++ else connections.remove(connection)
         }
         return sent
+    }
+
+    /**
+     * 向所有连接发心跳，返回存活连接数（`docs/design/0016` 第 2.4 节）。
+     *
+     * 存活判定依赖客户端按协议回 pong：读超时会被 NanoWSD 判为异常并关闭连接，
+     * 这里只负责把发送失败的连接摘掉。
+     */
+    fun pingAll(): Int {
+        var alive = 0
+        connections.forEach { connection ->
+            if (connection.sendPing()) alive++ else connections.remove(connection)
+        }
+        return alive
     }
 
     /** 断开全部连接（更换配对码后旧连接立即失效）。 */

@@ -23,7 +23,7 @@ import kotlinx.serialization.json.jsonPrimitive
 class HostApi(
     private val backend: MenuBackend,
     private val tokenProvider: () -> String,
-    private val log: (String, Throwable?) -> Unit = { _, _ -> },
+    private val logError: (String, Throwable?) -> Unit = { _, _ -> },
     private val cacheCapacity: Int = IDEMPOTENCY_CAPACITY,
     private val maxImageBytes: Int = MAX_IMAGE_BYTES
 ) {
@@ -300,7 +300,7 @@ class HostApi(
 
     private fun internalError(path: String, e: Exception): HostResponse {
         val logId = "%06x".format((System.currentTimeMillis() and 0xFFFFFF))
-        log("主机处理 $path 失败（日志 ID $logId）", e)
+        logError("主机处理 $path 失败（日志 ID $logId）", e)
         return failure(500, ErrorCode.INTERNAL, "服务器内部错误（日志 ID $logId）")
     }
 

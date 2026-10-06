@@ -74,7 +74,8 @@ class HostServerTest {
                 repository = repository,
                 tokenProvider = { token },
                 scope = scope,
-                log = { _, _ -> },
+                logInfo = { },
+                logError = { _, _ -> },
                 preferredPort = TEST_PORT
             )
         ) { "主机服务未能绑定到 $TEST_PORT 起的端口" }
@@ -368,9 +369,13 @@ class HostServerTest {
         }
 
         fun readTextFrame(): String {
-            val (opcode, payload) = readFrame()
-            check(opcode == OPCODE_TEXT) { "期望文本帧，实际 opcode=$opcode" }
-            return String(payload, Charsets.UTF_8)
+            while (true) {
+                val (opcode, payload) = readFrame()
+                // 服务端会定期发心跳 ping，读取时跳过控制帧（docs/design/0016 第 2.4 节）。
+                if (opcode == OPCODE_PING || opcode == OPCODE_PONG) continue
+                check(opcode == OPCODE_TEXT) { "期望文本帧，实际 opcode=$opcode" }
+                return String(payload, Charsets.UTF_8)
+            }
         }
 
         fun readFrameOpcode(): Int = readFrame().first
@@ -384,6 +389,8 @@ class HostServerTest {
         const val TEST_PORT = 18080
         const val TIMEOUT_MS = 5_000
         const val OPCODE_TEXT = 0x1
+        const val OPCODE_PING = 0x9
+        const val OPCODE_PONG = 0xA
         const val OPCODE_CLOSE = 0x8
     }
 }

@@ -65,16 +65,20 @@ import androidx.core.content.ContextCompat
 import com.tanpai.menu.R
 import com.tanpai.menu.backup.BackupFailure
 import com.tanpai.menu.backup.BackupResult
+import com.tanpai.menu.data.PinManager
 import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.domain.SellError
 import com.tanpai.menu.domain.SellResult
+import com.tanpai.menu.host.OnlineDevice
+import com.tanpai.menu.net.protocol.DeviceRole
 import com.tanpai.menu.kiosk.exitToHome
 import com.tanpai.menu.kiosk.openHomeSettings
 import com.tanpai.menu.ui.theme.BackgroundStyle
 import com.tanpai.menu.ui.theme.BackgroundStyles
 import com.tanpai.menu.ui.theme.backgroundStyle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -88,9 +92,16 @@ private val NarrowDishRowWidth = 480.dp
 /** 设置弹窗中配对二维码的显示边长。 */
 private val HostQrSize = 180.dp
 
+/** 设置弹窗内主机状态与在线设备的刷新间隔。 */
+private const val HOST_REFRESH_INTERVAL_MS = 2_000L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
+fun AdminScreen(
+    viewModel: AdminViewModel,
+    pinManager: PinManager,
+    onExit: () -> Unit
+) {
     val menu by viewModel.menu.collectAsState()
     val backupResult by viewModel.backupResult.collectAsState()
     val resetDone by viewModel.resetDone.collectAsState()
@@ -112,9 +123,15 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
     var editingDish by remember { mutableStateOf<Dish?>(null) }
     var deletingDish by remember { mutableStateOf<Dish?>(null) }
     var showSettings by remember { mutableStateOf(false) }
+    var showPinChange by remember { mutableStateOf(false) }
+    var showPinDisable by remember { mutableStateOf(false) }
 
+    // 设置弹窗可见期间每 2 秒刷新主机状态与在线设备；关闭即停（docs/design/0016 第 2.4 节）。
     LaunchedEffect(showSettings) {
-        if (showSettings) viewModel.refreshHostInfo()
+        while (showSettings) {
+            viewModel.refreshHostInfo()
+            delay(HOST_REFRESH_INTERVAL_MS)
+        }
     }
 
     var message by remember { mutableStateOf<String?>(null) }
@@ -123,6 +140,8 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
     val errStockDisabled = stringResource(R.string.admin_err_stock_disabled)
     val errNoRevocable = stringResource(R.string.admin_err_no_revocable)
     val errNotFound = stringResource(R.string.admin_err_not_found)
+    val pinChangedText = stringResource(R.string.settings_pin_changed)
+    val pinDisabledText = stringResource(R.string.settings_pin_disabled)
 
     val onSellResult: (SellResult) -> Unit = { result ->
         message = when (result) {
@@ -311,6 +330,28 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             onDismiss = { deletingDish = null }
         )
     }
+    if (showPinChange) {
+        PinChangeDialog(
+            pinManager = pinManager,
+            onDone = {
+                showPinChange = false
+                message = pinChangedText
+            },
+            onDismiss = { showPinChange = false }
+        )
+    }
+
+    if (showPinDisable) {
+        PinDisableDialog(
+            pinManager = pinManager,
+            onDone = {
+                showPinDisable = false
+                message = pinDisabledText
+            },
+            onDismiss = { showPinDisable = false }
+        )
+    }
+
     if (showSettings) {
         SettingsDialog(
             storeName = viewModel.storeName,
@@ -321,6 +362,8 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             backgroundStyleId = viewModel.backgroundStyleId,
             backgroundScrimPercent = viewModel.backgroundScrimPercent,
             wechatQrImagePath = viewModel.wechatQrImagePath,
+            hostEnabled = viewModel.hostEnabled,
+            onlineDevices = viewModel.onlineDevices,
             hostRunning = viewModel.hostRunning,
             hostAddress = viewModel.hostAddress,
             pairToken = viewModel.pairToken,
@@ -337,6 +380,15 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             onImportWechatQr = { uri -> viewModel.applyWechatQr(uri) },
             onClearWechatQr = { viewModel.clearWechatQr() },
             onRegeneratePairToken = { viewModel.regeneratePairToken() },
+            onHostEnabledChange = { viewModel.applyHostEnabled(it) },
+            onChangePin = {
+                showSettings = false
+                showPinChange = true
+            },
+            onDisablePin = {
+                showSettings = false
+                showPinDisable = true
+            },
             resetDone = resetDone,
             onResetSeed = { viewModel.resetToDefaultMenu() },
             onClearResetDone = { viewModel.clearResetDone() },
@@ -359,6 +411,8 @@ private fun SettingsDialog(
     backgroundStyleId: String?,
     backgroundScrimPercent: Int,
     wechatQrImagePath: String?,
+    hostEnabled: Boolean,
+    onlineDevices: List<OnlineDevice>,
     hostRunning: Boolean,
     hostAddress: String?,
     pairToken: String,
@@ -375,6 +429,9 @@ private fun SettingsDialog(
     onImportWechatQr: suspend (Uri) -> Boolean,
     onClearWechatQr: () -> Unit,
     onRegeneratePairToken: () -> Unit,
+    onHostEnabledChange: (Boolean) -> Unit,
+    onChangePin: () -> Unit,
+    onDisablePin: () -> Unit,
     resetDone: Boolean,
     onResetSeed: () -> Unit,
     onClearResetDone: () -> Unit,
@@ -699,7 +756,24 @@ private fun SettingsDialog(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 16.dp)
                 )
-                if (hostRunning) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_host_enable),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(checked = hostEnabled, onCheckedChange = onHostEnabledChange)
+                }
+                if (!hostEnabled) {
+                    Text(
+                        text = stringResource(R.string.settings_host_disabled),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (hostRunning) {
                     Text(
                         text = stringResource(R.string.settings_host_running),
                         style = MaterialTheme.typography.bodyMedium,
@@ -730,12 +804,48 @@ private fun SettingsDialog(
                     TextButton(onClick = { confirmRegenerateToken = true }) {
                         Text(stringResource(R.string.settings_host_regenerate))
                     }
+                    Text(
+                        text = stringResource(R.string.settings_host_devices, onlineDevices.size),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                    if (onlineDevices.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.settings_host_devices_empty),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        onlineDevices.forEach { device ->
+                            Text(
+                                text = stringResource(
+                                    R.string.settings_host_device_row,
+                                    device.name,
+                                    hostDeviceRoleLabel(device.role),
+                                    hostDeviceConnectedLabel(device.connectedAtMillis)
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
                 } else {
                     Text(
                         text = stringResource(R.string.settings_host_stopped),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error
                     )
+                }
+                Text(
+                    text = stringResource(R.string.settings_pin_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+                TextButton(onClick = onChangePin) {
+                    Text(stringResource(R.string.settings_pin_change))
+                }
+                TextButton(onClick = onDisablePin) {
+                    Text(stringResource(R.string.settings_pin_disable))
                 }
                 TextButton(
                     onClick = { openHomeSettings(context) },                    modifier = Modifier.padding(top = 8.dp)
@@ -1053,4 +1163,25 @@ private enum class ImageTarget {
 
     /** 展示页微信二维码。 */
     WechatQr
+}
+
+
+/** 在线设备角色文案：主机角色显示「平板」，其余显示「手机」。 */
+@Composable
+private fun hostDeviceRoleLabel(role: String): String =
+    if (role == DeviceRole.HOST) {
+        stringResource(R.string.settings_host_device_role_tablet)
+    } else {
+        stringResource(R.string.settings_host_device_role_phone)
+    }
+
+/** 在线设备已连接时长文案；不足 1 分钟显示「刚刚连接」。 */
+@Composable
+private fun hostDeviceConnectedLabel(connectedAtMillis: Long): String {
+    val minutes = ((System.currentTimeMillis() - connectedAtMillis) / 60_000L).toInt()
+    return if (minutes < 1) {
+        stringResource(R.string.settings_host_connected_just_now)
+    } else {
+        stringResource(R.string.settings_host_connected_minutes, minutes)
+    }
 }

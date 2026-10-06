@@ -20,7 +20,7 @@ interface DeviceDao {
     @Query("DELETE FROM connected_device WHERE id = :id")
     suspend fun delete(id: String)
 
-    /** 清理超过 [threshold] 未活跃的设备记录。 */
+    /** 清理超过 [threshold] 未活跃的设备记录，返回删除条数。 */
     @Query("DELETE FROM connected_device WHERE lastSeen < :threshold")
-    suspend fun deleteStale(threshold: Long)
+    suspend fun deleteStale(threshold: Long): Int
 }

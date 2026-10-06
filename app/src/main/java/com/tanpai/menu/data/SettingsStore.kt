@@ -104,6 +104,11 @@ class SettingsStore(context: Context) {
             .putInt(KEY_SERVER_PORT, value.coerceIn(MIN_SERVER_PORT, MAX_SERVER_PORT))
             .apply()
 
+    /** 是否启用手机控制端（主机前台服务）；关闭时不监听任何端口。 */
+    var hostEnabled: Boolean
+        get() = prefs.getBoolean(KEY_HOST_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_HOST_ENABLED, value).apply()
+
     /** 重新生成配对码并落盘，返回新码；调用方负责断开现有连接。 */
     fun regeneratePairToken(): String = generatePairToken().also { pairToken = it }
 
@@ -152,6 +157,7 @@ class SettingsStore(context: Context) {
         const val KEY_DEVICE_ID = "device_id"
         const val KEY_PAIR_TOKEN = "pair_token"
         const val KEY_SERVER_PORT = "server_port"
+        const val KEY_HOST_ENABLED = "host_enabled"
         /** 配对码随机字节数（十六进制后 64 字符）。 */
         const val PAIR_TOKEN_BYTES = 32
         /** 主机服务默认端口。 */

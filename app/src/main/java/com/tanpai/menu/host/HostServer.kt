@@ -15,6 +15,7 @@ import fi.iki.elonen.NanoWSD.WebSocket
 import fi.iki.elonen.NanoWSD.WebSocketFrame
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
@@ -34,7 +35,8 @@ class HostServer private constructor(
     private val repository: MenuRepository,
     private val tokenProvider: () -> String,
     private val scope: CoroutineScope,
-    private val log: (String, Throwable?) -> Unit,
+    private val logInfo: (String) -> Unit,
+    private val logError: (String, Throwable?) -> Unit,
     private val bindPort: Int
 ) : NanoWSD("0.0.0.0", bindPort) {
 
@@ -44,6 +46,9 @@ class HostServer private constructor(
     private var started = false
 
     private var changesJob: Job? = null
+
+    /** WS 心跳任务：定期 ping，借读超时淘汰掉线设备。 */
+    private var pingJob: Job? = null
 
     /** 实际绑定的端口；未启动成功时为 0。 */
     val port: Int get() = if (started) bindPort else 0
@@ -59,10 +64,16 @@ class HostServer private constructor(
             changesJob = scope.launch {
                 repository.events.collect { change -> broadcastChange(change) }
             }
-            log("主机服务已启动，端口 $bindPort", null)
+            pingJob = scope.launch {
+                while (true) {
+                    delay(PING_INTERVAL_MS)
+                    hub.pingAll()
+                }
+            }
+            logInfo("主机服务已启动，端口 $bindPort")
             true
         } catch (e: IOException) {
-            log("主机服务绑定端口 $bindPort 失败", e)
+            logError("主机服务绑定端口 $bindPort 失败", e)
             false
         }
     }
@@ -73,9 +84,11 @@ class HostServer private constructor(
         started = false
         changesJob?.cancel()
         changesJob = null
+        pingJob?.cancel()
+        pingJob = null
         hub.closeAll(CODE_GOING_AWAY, "服务已停止")
         stop()
-        log("主机服务已停止", null)
+        logInfo("主机服务已停止")
     }
 
     /** 更换配对码后断开全部连接：旧码立即失效，客户端需重新配对。 */
@@ -122,7 +135,7 @@ class HostServer private constructor(
         } catch (e: NanoHTTPD.ResponseException) {
             toResponse(jsonError(400, ErrorCode.INVALID_ARGUMENT, "请求体格式错误"))
         } catch (e: Exception) {
-            log("主机处理 $path 失败", e)
+            logError("主机处理 $path 失败", e)
             toResponse(jsonError(500, ErrorCode.INTERNAL, "服务器内部错误"))
         }
     }
@@ -201,7 +214,17 @@ class HostServer private constructor(
             hub.changeEvent(change) ?: return
         }
         val sent = hub.broadcast(event)
-        if (sent > 0) log("已广播 ${event.type}（版本 ${event.version}）给 $sent 个连接", null)
+        if (sent > 0) logInfo("已广播 ${event.type}（版本 ${event.version}）给 $sent 个连接")
+    }
+
+    /** 当前在线设备快照（按连接时间升序，docs/design/0016 第 2.4 节）。 */
+    fun onlineDevices(): List<OnlineDevice> = hub.connections().map { connection ->
+        OnlineDevice(
+            deviceId = connection.deviceId,
+            name = connection.name,
+            role = connection.role,
+            connectedAtMillis = connection.connectedAt
+        )
     }
 
     private fun toResponse(response: HostResponse): Response {
@@ -241,9 +264,11 @@ class HostServer private constructor(
         override val role: String =
             requestedRole?.takeIf { it.isNotBlank() } ?: DeviceRole.CLIENT
 
+        override val connectedAt: Long = System.currentTimeMillis()
+
         override fun onOpen() {
             if (!authorized) {
-                log("WS 配对码校验失败，已拒绝连接", null)
+                logError("WS 配对码校验失败，已拒绝连接", null)
                 close(CODE_UNAUTHORIZED, "配对码缺失或已失效")
                 return
             }
@@ -257,7 +282,7 @@ class HostServer private constructor(
                     except = this@MenuSocket
                 )
             }
-            log("客户端已连接：$name（$deviceId）", null)
+            logInfo("客户端已连接：$name（$deviceId）")
         }
 
         override fun onClose(code: WebSocketFrame.CloseCode?, reason: String?, remote: Boolean) {
@@ -269,7 +294,7 @@ class HostServer private constructor(
                     hub.deviceEvent(EventType.DEVICE_LEFT, backend.currentVersion(), currentDevice())
                 )
             }
-            log("客户端已断开：$name（$deviceId）", null)
+            logInfo("客户端已断开：$name（$deviceId）")
         }
 
         override fun onMessage(message: WebSocketFrame) = Unit
@@ -278,10 +303,12 @@ class HostServer private constructor(
 
         override fun onException(exception: IOException) {
             hub.remove(this)
-            log("WS 连接异常：$deviceId", exception)
+            logError("WS 连接异常：$deviceId", exception)
         }
 
         override fun push(frame: String): Boolean = runCatching { send(frame) }.isSuccess
+
+        override fun sendPing(): Boolean = runCatching { ping(ByteArray(0)) }.isSuccess
 
         override fun close(code: Int, reason: String) {
             runCatching { sendFrame(closeFrame(code, reason)) }
@@ -315,7 +342,14 @@ class HostServer private constructor(
         private const val MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
         /** 连接空闲读超时（毫秒）。 */
-        private const val READ_TIMEOUT_MS = 5000
+        /**
+         * 连接读超时；同时是「无 pong 响应多久判定掉线」的上限。
+         * 取值需大于 [PING_INTERVAL_MS]，否则空闲的 WS 连接会被误判（`docs/design/0016` 第 2.4 节）。
+         */
+        private const val READ_TIMEOUT_MS = 60_000
+
+        /** 服务端主动心跳间隔；客户端按协议自动回 pong，用于刷新读超时。 */
+        private const val PING_INTERVAL_MS = 20_000L
 
         /** 未提供设备名时的占位名。 */
         private const val UNNAMED_DEVICE = "未命名设备"
@@ -343,7 +377,8 @@ class HostServer private constructor(
             repository: MenuRepository,
             tokenProvider: () -> String,
             scope: CoroutineScope,
-            log: (String, Throwable?) -> Unit,
+            logInfo: (String) -> Unit,
+            logError: (String, Throwable?) -> Unit,
             preferredPort: Int
         ): HostServer? {
             for (offset in 0 until PORT_FALLBACK_COUNT) {
@@ -353,7 +388,8 @@ class HostServer private constructor(
                     repository = repository,
                     tokenProvider = tokenProvider,
                     scope = scope,
-                    log = log,
+                    logInfo = logInfo,
+                    logError = logError,
                     bindPort = preferredPort + offset
                 )
                 if (server.startServing()) return server

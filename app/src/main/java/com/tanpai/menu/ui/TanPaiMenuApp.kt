@@ -28,12 +28,17 @@ import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.host.HostStatusProvider
 import com.tanpai.menu.imaging.ImageStore
 import com.tanpai.menu.ui.admin.AdminScreen
+import com.tanpai.menu.ui.admin.ConfirmDialog
+import com.tanpai.menu.ui.admin.HoldToTriggerButton
 import com.tanpai.menu.ui.admin.AdminViewModel
 import com.tanpai.menu.ui.display.DisplayScreen
 import com.tanpai.menu.ui.display.DisplayViewModel
 import kotlinx.coroutines.delay
 
 private const val SCREEN_DISPLAY = "display"
+
+/** 「忘记密码」需长按的时长（毫秒）。 */
+private const val FORGOT_HOLD_MS = 3_000L
 private const val SCREEN_ADMIN = "admin"
 
 private enum class PinDialog { None, Setup, Enter }
@@ -49,6 +54,8 @@ fun TanPaiMenuApp(
 ) {
     var screen by rememberSaveable { mutableStateOf(SCREEN_DISPLAY) }
     var pinDialog by remember { mutableStateOf(PinDialog.None) }
+    // 忘记密码重置后必须重新设置密码，此时「设置管理密码」不可取消（docs/design/0017 第 2.2 节）。
+    var pinSetupForced by remember { mutableStateOf(false) }
 
     val displayViewModel: DisplayViewModel =
         viewModel(factory = DisplayViewModel.factory(repository))
@@ -60,7 +67,11 @@ fun TanPaiMenuApp(
         )
 
     if (screen == SCREEN_ADMIN) {
-        AdminScreen(viewModel = adminViewModel, onExit = { screen = SCREEN_DISPLAY })
+        AdminScreen(
+            viewModel = adminViewModel,
+            pinManager = pinManager,
+            onExit = { screen = SCREEN_DISPLAY }
+        )
     } else {
         DisplayScreen(
             viewModel = displayViewModel,
@@ -73,24 +84,35 @@ fun TanPaiMenuApp(
             wechatQrImagePath = settings.wechatQrImagePath,
             onRequestAdmin = {
                 pinDialog = if (pinManager.isPinSet()) PinDialog.Enter else PinDialog.Setup
+                pinSetupForced = false
             }
         )
     }
 
     when (pinDialog) {
         PinDialog.Setup -> PinSetupDialog(
+            cancellable = !pinSetupForced,
             onConfirm = { pin ->
                 pinManager.setPin(pin)
                 pinDialog = PinDialog.None
+                pinSetupForced = false
                 screen = SCREEN_ADMIN
             },
-            onDismiss = { pinDialog = PinDialog.None }
+            onDismiss = {
+                pinDialog = PinDialog.None
+                pinSetupForced = false
+            }
         )
         PinDialog.Enter -> PinEntryDialog(
             pinManager = pinManager,
             onSuccess = {
                 pinDialog = PinDialog.None
                 screen = SCREEN_ADMIN
+            },
+            onForgot = {
+                pinManager.clearPin()
+                pinSetupForced = true
+                pinDialog = PinDialog.Setup
             },
             onDismiss = { pinDialog = PinDialog.None }
         )
@@ -99,7 +121,11 @@ fun TanPaiMenuApp(
 }
 
 @Composable
-private fun PinSetupDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+private fun PinSetupDialog(
+    cancellable: Boolean,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
     var pin by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
@@ -108,7 +134,7 @@ private fun PinSetupDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     val matched = pin == confirmation
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (cancellable) onDismiss() },
         title = { Text(stringResource(R.string.pin_setup_title)) },
         text = {
             Column {
@@ -145,7 +171,9 @@ private fun PinSetupDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
             ) { Text(stringResource(R.string.admin_confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.admin_cancel)) }
+            if (cancellable) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.admin_cancel)) }
+            }
         }
     )
 }
@@ -154,11 +182,13 @@ private fun PinSetupDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
 private fun PinEntryDialog(
     pinManager: PinManager,
     onSuccess: () -> Unit,
+    onForgot: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var lockedSeconds by remember { mutableIntStateOf(pinManager.lockRemainingSeconds()) }
+    var confirmForgot by remember { mutableStateOf(false) }
 
     LaunchedEffect(lockedSeconds) {
         while (lockedSeconds > 0) {
@@ -207,7 +237,31 @@ private fun PinEntryDialog(
             ) { Text(stringResource(R.string.admin_confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.admin_cancel)) }
+            Column {
+                HoldToTriggerButton(
+                    text = stringResource(R.string.pin_forgot),
+                    holdMillis = FORGOT_HOLD_MS,
+                    onTriggered = { confirmForgot = true }
+                )
+                Text(
+                    text = stringResource(R.string.pin_forgot_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.admin_cancel)) }
+            }
         }
     )
+
+    if (confirmForgot) {
+        ConfirmDialog(
+            title = stringResource(R.string.pin_forgot_title),
+            text = stringResource(R.string.pin_forgot_confirm),
+            onConfirm = {
+                confirmForgot = false
+                onForgot()
+            },
+            onDismiss = { confirmForgot = false }
+        )
+    }
 }

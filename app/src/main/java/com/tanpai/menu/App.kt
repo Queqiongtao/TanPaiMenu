@@ -9,6 +9,7 @@ import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.data.db.TpDatabase
 import com.tanpai.menu.host.HostApi
 import com.tanpai.menu.host.HostInfo
+import com.tanpai.menu.host.HostService
 import com.tanpai.menu.host.HostServer
 import com.tanpai.menu.host.HostStatusProvider
 import com.tanpai.menu.host.RepositoryMenuBackend
@@ -37,7 +38,7 @@ class AppContainer(context: Context) {
     val hostApi: HostApi = HostApi(
         backend = menuBackend,
         tokenProvider = { settingsStore.pairToken },
-        log = { message, throwable -> TpLog.e("host", message, throwable) }
+        logError = { message, throwable -> TpLog.e("host", message, throwable) }
     )
 
     /** 主机服务实例：`App.onCreate` 启动成功后赋值，全为 null 表示未启动。 */
@@ -70,13 +71,30 @@ class App : Application() {
                 val removed = container.imageStore.deleteOrphans(referenced)
                 if (removed > 0) TpLog.i("image", "启动清理孤儿图片 $removed 张")
             }.onFailure { TpLog.e("app", "启动初始化失败", it) }
-            runCatching { startHostServer() }
-                .onFailure { TpLog.e("host", "主机服务启动异常", it) }
+            runCatching {
+                if (container.settingsStore.hostEnabled) {
+                    HostService.start(this@App)
+                } else {
+                    TpLog.i("host", "手机控制端已关闭，不启动主机服务")
+                }
+            }.onFailure { TpLog.e("host", "主机前台服务启动异常", it) }
         }
     }
 
+    /** 幂等启动主机服务：已监听时直接返回；由 HostService 在 IO 线程调用。 */
+    suspend fun ensureHostServerStarted() {
+        if (container.hostServer?.isServing == true) return
+        startHostServer()
+    }
+
+    /** 停止主机服务并释放实例；手机控制端被关闭或服务销毁时调用。 */
+    fun stopHostServer() {
+        container.hostServer?.stopServing()
+        container.hostServer = null
+    }
+
     /** 启动局域网主机服务；端口顺延后仍失败则记日志（平板本机功能不受影响）。 */
-    private fun startHostServer() {
+    private suspend fun startHostServer() {
         val preferred = container.settingsStore.serverPort
         val server = HostServer.start(
             api = container.hostApi,
@@ -84,7 +102,8 @@ class App : Application() {
             repository = container.menuRepository,
             tokenProvider = { container.settingsStore.pairToken },
             scope = appScope,
-            log = { message, throwable -> TpLog.e("host", message, throwable) },
+            logInfo = { message -> TpLog.i("host", message) },
+            logError = { message, throwable -> TpLog.e("host", message, throwable) },
             preferredPort = preferred
         )
         container.hostServer = server
@@ -95,9 +114,19 @@ class App : Application() {
                 null
             )
         } else {
+            runCatching {
+                val stale = container.database.deviceDao()
+                    .deleteStale(System.currentTimeMillis() - DEVICE_RETENTION_MS)
+                if (stale > 0) TpLog.i("host", "清理过期设备记录 $stale 条")
+            }.onFailure { TpLog.e("host", "清理过期设备记录失败", it) }
             val address = HostInfo.address(HostInfo.lanIpv4(this), server.port)
                 ?: "（未获取到局域网地址）"
             TpLog.i("host", "配对信息：$address 配对码 ${container.settingsStore.pairToken}")
         }
+    }
+
+    private companion object {
+        /** 设备注册表保留时长：超过该时长未活跃的记录在服务启动时清理。 */
+        const val DEVICE_RETENTION_MS = 7L * 24 * 60 * 60 * 1000
     }
 }

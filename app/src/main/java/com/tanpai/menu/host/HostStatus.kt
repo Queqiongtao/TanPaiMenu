@@ -35,6 +35,27 @@ class HostStatusProvider(
     /** 生成二维码位图；无可用地址或编码失败返回 null。 */
     fun qrBitmap(sizePx: Int): Bitmap? = qrContent()?.let { HostInfo.qrBitmap(it, sizePx) }
 
+    /** 是否启用手机控制端（持久化在 SettingsStore.hostEnabled）。 */
+    val hostEnabled: Boolean get() = settings.hostEnabled
+
+    /**
+     * 打开 / 关闭手机控制端：立即启停前台服务（docs/design/0016 第 2.2 节），返回新状态。
+     *
+     * 启停是异步的（服务在 IO 线程建 / 拆监听），调用方随后刷新一次即可，UI 另有 2 秒轮询兜底。
+     */
+    fun setHostEnabled(enabled: Boolean): Boolean {
+        settings.hostEnabled = enabled
+        if (enabled) {
+            HostService.start(context)
+        } else {
+            HostService.stop(context)
+        }
+        return enabled
+    }
+
+    /** 当前在线设备快照（docs/design/0016 第 2.4 节）；服务未启动时为空。 */
+    fun onlineDevices(): List<OnlineDevice> = server()?.onlineDevices().orEmpty()
+
     /** 更换配对码并断开现有连接（旧码立即失效），返回新码。 */
     fun regeneratePairToken(): String {
         val token = settings.regeneratePairToken()

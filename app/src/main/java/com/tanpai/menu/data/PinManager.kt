@@ -15,6 +15,17 @@ class PinManager(private val settings: SettingsStore) {
         settings.pinLockUntil = 0L
     }
 
+    /**
+     * 清除管理密码（含失败计数与锁定），下次长按店名会重新进入「设置管理密码」。
+     * 供「关闭密码保护」与「忘记密码」两条通道使用（`docs/design/0017`）。
+     */
+    fun clearPin() {
+        settings.adminPinHash = null
+        settings.adminSalt = null
+        settings.pinFailures = 0
+        settings.pinLockUntil = 0L
+    }
+
     fun isLocked(now: Long = System.currentTimeMillis()): Boolean = now < settings.pinLockUntil
 
     fun lockRemainingSeconds(now: Long = System.currentTimeMillis()): Int =

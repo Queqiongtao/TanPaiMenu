@@ -16,6 +16,7 @@ import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.SellResult
 import com.tanpai.menu.host.HostStatusProvider
+import com.tanpai.menu.host.OnlineDevice
 import com.tanpai.menu.imaging.ImageStore
 import com.tanpai.menu.logging.TpLog
 import com.tanpai.menu.ui.theme.BackgroundStyles
@@ -50,6 +51,14 @@ class AdminViewModel(
 
     /** 配对二维码位图；地址不可用或编码失败时为 null。 */
     var hostQrBitmap by mutableStateOf<Bitmap?>(null)
+        private set
+
+    /** 手机控制端开关状态；由 HostStatusProvider 读写并启停前台服务。 */
+    var hostEnabled by mutableStateOf(settings.hostEnabled)
+        private set
+
+    /** 当前在线设备（只显示在线，见 `docs/design/0016` 第 2.4 节）。 */
+    var onlineDevices by mutableStateOf<List<OnlineDevice>>(emptyList())
         private set
 
     var storeName by mutableStateOf(settings.displayStoreName)
@@ -118,12 +127,21 @@ class AdminViewModel(
         settings.backgroundScrimPercent = value
     }
 
-    /** 刷新主机运行状态与配对信息（设置弹窗打开时调用）。 */
+    /** 刷新主机运行状态、配对信息与在线设备（设置弹窗打开时每 2 秒调用）。 */
     fun refreshHostInfo() {
+        hostEnabled = hostStatus.hostEnabled
         hostRunning = hostStatus.running
         hostAddress = hostStatus.address()
         pairToken = hostStatus.pairToken
         hostQrBitmap = hostStatus.qrBitmap(HOST_QR_SIZE_PX)
+        onlineDevices = hostStatus.onlineDevices()
+    }
+
+    /** 打开 / 关闭手机控制端：立即启停前台服务并刷新状态。 */
+    fun applyHostEnabled(enabled: Boolean) {
+        hostEnabled = hostStatus.setHostEnabled(enabled)
+        TpLog.i(TAG, if (enabled) "已启用手机控制端" else "已关闭手机控制端")
+        refreshHostInfo()
     }
 
     /** 更换配对码并断开现有客户端连接；二维码随之更新。 */
