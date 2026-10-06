@@ -24,7 +24,7 @@ object SeedMenu {
         SeedDish("臭香皮蛋", 12, "century-egg.jpg"),
         SeedDish("贡菜馄饨", 12, "gong-cai.jpg"),
         SeedDish("香菇马蹄", 12, "shiitake-water-chestnut.jpg"),
-        SeedDish("虾仁鲜肉", 12, "shrimp.jpg"),
+        SeedDish("虾仁鲜肉", 20, "shrimp.jpg"),
         SeedDish("全家福", 20, "wonton-bowl.jpg"),
         SeedDish("荠菜鲜肉", 12, "shepherds-purse.jpg"),
         SeedDish("辣白菜鲜肉", 12, "kimchi.jpg"),
