@@ -76,7 +76,7 @@ private val NarrowTopBarWidth = 720.dp
 private val SingleRowCardHeight = 68.dp
 private val SingleRowCardHorizontalPadding = 10.dp
 private val SingleRowCardVerticalPadding = 6.dp
-private val SingleRowThumbnailSize = 56.dp
+
 private val SingleRowThumbnailGap = 8.dp
 private val SingleRowColumnGap = 5.dp
 private val SingleRowPriceColumnWidth = 128.dp
@@ -86,10 +86,13 @@ private val SingleRowPriceUnitSize = 13.sp
 private val SingleRowStatusColumnWidth = 68.dp
 private val SingleRowStatusTextSize = 14.sp
 
-private val TwoRowCardHeight = 96.dp
+/** 两行档卡高：上下内边距 16 + 缩略图 56 + 行距 8 + 价格行约 37 + 余量，保证缩略图不被压扁。 */
+private val TwoRowCardHeight = 120.dp
+/** 缩略图边长：单行 / 两行档一致（竖屏与横屏保持同尺寸）。 */
+private val ThumbnailSize = 56.dp
 private val TwoRowCardHorizontalPadding = 8.dp
 private val TwoRowCardVerticalPadding = 8.dp
-private val TwoRowThumbnailSize = 44.dp
+
 private val TwoRowThumbnailGap = 8.dp
 private val TwoRowColumnGap = 8.dp
 private val TwoRowPriceTagMinWidth = 72.dp
@@ -171,7 +174,7 @@ private fun singleRowSpec(columns: Int) = DisplaySpec(
     cardHeight = SingleRowCardHeight,
     cardHorizontalPadding = SingleRowCardHorizontalPadding,
     cardVerticalPadding = SingleRowCardVerticalPadding,
-    thumbnailSize = SingleRowThumbnailSize,
+    thumbnailSize = ThumbnailSize,
     thumbnailGap = SingleRowThumbnailGap,
     columnGap = SingleRowColumnGap,
     priceColumnWidth = SingleRowPriceColumnWidth,
@@ -190,7 +193,7 @@ private fun twoRowSpec(columns: Int) = DisplaySpec(
     cardHeight = TwoRowCardHeight,
     cardHorizontalPadding = TwoRowCardHorizontalPadding,
     cardVerticalPadding = TwoRowCardVerticalPadding,
-    thumbnailSize = TwoRowThumbnailSize,
+    thumbnailSize = ThumbnailSize,
     thumbnailGap = TwoRowThumbnailGap,
     columnGap = TwoRowColumnGap,
     priceColumnWidth = null,

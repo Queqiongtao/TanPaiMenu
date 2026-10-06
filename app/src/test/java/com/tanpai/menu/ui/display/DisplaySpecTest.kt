@@ -32,8 +32,8 @@ class DisplaySpecTest {
 
         assertEquals(2L, spec.columns.toLong())
         assertEquals(DishCardLayout.TwoRow, spec.cardLayout)
-        assertEquals(96.dp, spec.cardHeight)
-        assertEquals(44.dp, spec.thumbnailSize)
+        assertEquals(120.dp, spec.cardHeight)
+        assertEquals(56.dp, spec.thumbnailSize)
         assertNull(spec.priceColumnWidth)
         assertNull(spec.statusColumnWidth)
         assertEquals(72.dp, spec.priceTagMinWidth)
@@ -47,6 +47,15 @@ class DisplaySpecTest {
 
         assertEquals(1L, spec.columns.toLong())
         assertEquals(DishCardLayout.SingleRow, spec.cardLayout)
+    }
+
+    @Test
+    fun thumbnailKeepsSameSizeInPortraitAndLandscape() {
+        val landscape = displaySpecFor(width = 937.5.dp, height = 497.dp)
+        val portrait = displaySpecFor(width = 577.dp, height = 821.dp)
+
+        assertEquals(landscape.thumbnailSize, portrait.thumbnailSize)
+        assertEquals(56.dp, portrait.thumbnailSize)
     }
 
     @Test
