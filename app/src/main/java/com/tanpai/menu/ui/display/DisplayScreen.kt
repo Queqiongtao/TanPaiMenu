@@ -133,6 +133,8 @@ private val PriceColumnWidth = 128.dp
 private val PriceTagCorner = 10.dp
 private val PriceTagHorizontalPadding = 10.dp
 private val PriceTagVerticalPadding = 4.dp
+/** 价格胶囊最小宽度：短价格不再铺满整列，同时避免胶囊过窄。 */
+private val PriceTagMinWidth = 96.dp
 /** 价格数字字号（与菜名同级）与单位字号。 */
 private val PriceTextSize = 22.sp
 private val PriceUnitSize = 13.sp
@@ -403,41 +405,47 @@ private fun DishGrid(dishes: List<Dish>, showStockHint: Boolean, cardAlpha: Floa
 
 /**
  * 价格胶囊：淡色圆角底 + 喜庆红大字，单位以小字跟随，供顾客一眼看到价格。
- *
  * 卡片底可低至 15% 不透明度、背景可能是红色或照片，价格区靠固定 90% 白的胶囊底保证可读
  * （红字落在白底上约 6.2:1）；胶囊底不随卡片不透明度变化。见 `docs/design/0012-展示页价格强调.md`。
+ * 外层按列宽占位、内层胶囊宽度随内容自适应（`PriceTagMinWidth`–`PriceColumnWidth`），
+ * 既保证跨卡片左边界对齐，又不会在短价格右侧留下一大块空白。
  */
 @Composable
 private fun PriceTag(priceText: String, unit: String, modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier
-            .width(PriceColumnWidth)
-            .clip(RoundedCornerShape(PriceTagCorner))
-            .background(PriceColors.Container)
-            .padding(
-                horizontal = PriceTagHorizontalPadding,
-                vertical = PriceTagVerticalPadding
-            ),
+        modifier = modifier.width(PriceColumnWidth),
         contentAlignment = Alignment.CenterStart
     ) {
-        Text(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(fontSize = PriceTextSize)) { append(priceText) }
-                if (unit.isNotBlank()) {
-                    withStyle(
-                        SpanStyle(
-                            fontSize = PriceUnitSize,
-                            color = PriceColors.Content.copy(alpha = PriceUnitContentAlpha)
-                        )
-                    ) { append(" / " + unit) }
-                }
-            },
-            style = MaterialTheme.typography.titleMedium,
-            fontFamily = ChineseFontFamily,
-            color = PriceColors.Content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Box(
+            modifier = Modifier
+                .widthIn(min = PriceTagMinWidth, max = PriceColumnWidth)
+                .clip(RoundedCornerShape(PriceTagCorner))
+                .background(PriceColors.Container)
+                .padding(
+                    horizontal = PriceTagHorizontalPadding,
+                    vertical = PriceTagVerticalPadding
+                ),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(fontSize = PriceTextSize)) { append(priceText) }
+                    if (unit.isNotBlank()) {
+                        withStyle(
+                            SpanStyle(
+                                fontSize = PriceUnitSize,
+                                color = PriceColors.Content.copy(alpha = PriceUnitContentAlpha)
+                            )
+                        ) { append(" / " + unit) }
+                    }
+                },
+                style = MaterialTheme.typography.titleMedium,
+                fontFamily = ChineseFontFamily,
+                color = PriceColors.Content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
