@@ -9,7 +9,7 @@ data class SeedCategory(val category: Category, val dishes: List<Dish>)
  * 首启与「恢复默认菜单」写入的默认菜单：大金馄饨 12 道。
  *
  * 统一不启用库存（`stockEnabled = false`），日常只做沽清；
- * 价格单位为分，展示层再格式化为 `¥10.00`。
+ * 价格单位为分，展示层再格式化为 `¥10`（整数省略小数位）。
  */
 object SeedMenu {
 

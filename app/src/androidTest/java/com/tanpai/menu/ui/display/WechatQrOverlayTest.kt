@@ -39,14 +39,32 @@ class WechatQrOverlayTest {
         InstrumentationRegistry.getInstrumentation().targetContext
             .getString(R.string.display_wechat_qr_close_hint)
 
-    /** 用与展示页相同的条件渲染方式承载浮层：复原回调触发后浮层被移除。 */
-    private fun setOverlayContent() {
+    /**
+     * 用与展示页相同的条件渲染方式承载浮层：复原回调触发后浮层被移除。
+     *
+     * [onDismissed] 在浮层复原时回调，用于断言「复原」这一行为——浮层移除后内容为空，
+     * 再去查询语义树会拿不到 Compose 层级。
+     */
+    private fun setOverlayContent(model: Any = qrFile, onDismissed: () -> Unit = {}) {
         composeRule.setContent {
             var shown by remember { mutableStateOf(true) }
             if (shown) {
-                WechatQrOverlay(qrFile = qrFile, onDismiss = { shown = false })
+                WechatQrOverlay(
+                    qrModel = model,
+                    onDismiss = {
+                        shown = false
+                        onDismissed()
+                    }
+                )
             }
         }
+    }
+
+    @Test
+    fun rendersBuiltInDefaultImage() {
+        setOverlayContent(R.drawable.wechat_qr_default)
+        composeRule.onNodeWithText(hint).assertIsDisplayed()
+        composeRule.onNodeWithText(closeHint).assertIsDisplayed()
     }
 
     @Test
@@ -58,11 +76,10 @@ class WechatQrOverlayTest {
 
     @Test
     fun autoCollapsesAfterTimeout() {
-        setOverlayContent()
+        var dismissCount = 0
+        setOverlayContent(onDismissed = { dismissCount++ })
         composeRule.onNodeWithText(hint).assertIsDisplayed()
-        composeRule.waitUntil(timeoutMillis = 8_000) {
-            composeRule.onAllNodesWithText(hint).fetchSemanticsNodes().isEmpty()
-        }
+        composeRule.waitUntil(timeoutMillis = 8_000) { dismissCount == 1 }
     }
 
     @Test

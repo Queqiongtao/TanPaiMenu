@@ -7,16 +7,17 @@ class PriceFormatterTest {
 
     @Test
     fun formatsZero() {
-        assertEquals("¥0.00", PriceFormatter.formatYuan(0))
+        assertEquals("¥0", PriceFormatter.formatYuan(0))
     }
 
     @Test
-    fun formatsWholeYuan() {
-        assertEquals("¥12.00", PriceFormatter.formatYuan(1200))
+    fun formatsWholeYuanWithoutDecimals() {
+        assertEquals("¥12", PriceFormatter.formatYuan(1200))
     }
 
     @Test
-    fun formatsFraction() {
+    fun formatsJiaoAndFenWithTwoDecimals() {
+        assertEquals("¥10.50", PriceFormatter.formatYuan(1050))
         assertEquals("¥3.05", PriceFormatter.formatYuan(305))
     }
 
@@ -27,6 +28,6 @@ class PriceFormatterTest {
 
     @Test
     fun formatsNegative() {
-        assertEquals("-¥1.00", PriceFormatter.formatYuan(-100))
+        assertEquals("-¥1", PriceFormatter.formatYuan(-100))
     }
 }

@@ -36,6 +36,30 @@ class BackgroundStylesTest {
     }
 
     @Test
+    fun defaultIdResolvesToABuiltInStyle() {
+        val defaultStyle = BackgroundStyles.byId(BackgroundStyles.DEFAULT_ID)
+        assertSame(BackgroundStyles.All.first(), defaultStyle)
+    }
+
+    @Test
+    fun byIdOrDefaultFallsBackToDefaultStyle() {
+        assertSame(
+            BackgroundStyles.byId(BackgroundStyles.DEFAULT_ID),
+            BackgroundStyles.byIdOrDefault(null)
+        )
+        assertSame(
+            BackgroundStyles.byId(BackgroundStyles.DEFAULT_ID),
+            BackgroundStyles.byIdOrDefault("not_a_style")
+        )
+    }
+
+    @Test
+    fun byIdOrDefaultKeepsKnownStyle() {
+        val bamboo = BackgroundStyles.All.first { it.id == "bamboo" }
+        assertSame(bamboo, BackgroundStyles.byIdOrDefault("bamboo"))
+    }
+
+    @Test
     fun byIdReturnsNullForMissingId() {
         assertNull(BackgroundStyles.byId(null))
         assertNull(BackgroundStyles.byId(""))

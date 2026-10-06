@@ -113,7 +113,7 @@ class SettingsStore(context: Context) {
         const val KEY_WECHAT_QR_IMAGE = "wechat_qr_image"
         const val KEY_BACKGROUND_SCRIM = "background_scrim"
         /** 背景蒙版默认不透明度（百分比）。 */
-        const val DEFAULT_BACKGROUND_SCRIM_PERCENT = 30
+        const val DEFAULT_BACKGROUND_SCRIM_PERCENT = 25
         /** 背景蒙版不透明度下限（百分比）。 */
         const val MIN_BACKGROUND_SCRIM_PERCENT = 0
         /** 背景蒙版不透明度上限（百分比），过高会完全遮住背景图。 */

@@ -26,16 +26,19 @@ data class BackgroundStyle(
 )
 
 /**
- * 内置背景样式的注册表：6 款中式餐饮暖色渐变，按「再叠默认 30% 白蒙版后仍好看」调色。
+ * 内置背景样式的注册表：6 款中式餐饮暖色渐变，按「再叠白色蒙版后仍好看」调色。
  *
  * 前 5 款为暖色系，`bamboo` 作为唯一冷调点缀，避免色卡过于雷同。
  */
 object BackgroundStyles {
 
+    /** 默认样式 id（喜庆红）：未设置过背景时，展示页与管理页都回退到它。 */
+    const val DEFAULT_ID = "warm_red"
+
     /** 全部内置样式，顺序即设置页色卡的展示顺序（3 列 × 2 行）。 */
     val All: List<BackgroundStyle> = listOf(
         BackgroundStyle(
-            id = "warm_red",
+            id = DEFAULT_ID,
             labelRes = R.string.background_style_warm_red,
             gradient = listOf(Color(0xFFB32C1B), Color(0xFF6E150C)),
             glow = Color(0x26FFD9A0)
@@ -72,11 +75,14 @@ object BackgroundStyles {
         )
     )
 
-    /** 按 id 查样式；null、空白或未知 id 一律返回 null（展示页据此回退纯色底）。 */
+    /** 按 id 查样式；null、空白或未知 id 一律返回 null。 */
     fun byId(id: String?): BackgroundStyle? {
         val wanted = id?.takeIf { it.isNotBlank() } ?: return null
         return All.firstOrNull { it.id == wanted }
     }
+
+    /** 按 id 查样式，查不到时回退 [DEFAULT_ID]（喜庆红）：店面无自定义背景时恒有背景样式。 */
+    fun byIdOrDefault(id: String?): BackgroundStyle = byId(id) ?: All.first { it.id == DEFAULT_ID }
 
     /** 样式对应的绘制笔刷，顺序即叠绘顺序（先线性渐变打底，再叠居中光晕）。 */
     fun brushesOf(style: BackgroundStyle): List<Brush> = buildList {

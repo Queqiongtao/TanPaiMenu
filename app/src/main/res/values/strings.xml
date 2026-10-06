@@ -84,11 +84,11 @@
     <string name="settings_background_import_failed">背景图读取失败，请重新选择</string>
     <string name="settings_camera_permission_denied">未授予相机权限，无法拍照</string>
     <string name="settings_wechat_qr">微信二维码</string>
-    <string name="settings_wechat_qr_none">未设置</string>
+    <string name="settings_wechat_qr_default">使用内置默认</string>
     <string name="settings_wechat_qr_set">已设置</string>
     <string name="settings_wechat_qr_choose">选择图片</string>
     <string name="settings_wechat_qr_capture">拍照</string>
-    <string name="settings_wechat_qr_clear">清除</string>
+    <string name="settings_wechat_qr_clear">恢复默认</string>
     <string name="display_wechat_qr_hint">加微信</string>
     <string name="display_wechat_qr_close_hint">点击任意处关闭</string>
     <string name="settings_reset_seed">恢复默认菜单</string>

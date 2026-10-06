@@ -16,6 +16,7 @@ import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.SellResult
 import com.tanpai.menu.imaging.ImageStore
 import com.tanpai.menu.logging.TpLog
+import com.tanpai.menu.ui.theme.BackgroundStyles
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,7 +47,17 @@ class AdminViewModel(
 
     var backgroundImagePath by mutableStateOf(settings.backgroundImagePath)
         private set
-    var backgroundStyleId by mutableStateOf(settings.backgroundStyleId)
+    /**
+     * 设置页当前选中的内置样式；null 表示正在使用自定义背景图（此时不高亮任何样式卡）。
+     * 未设置过背景时回退默认样式「喜庆红」，与实际展示页一致。
+     */
+    var backgroundStyleId by mutableStateOf(
+        if (settings.backgroundImagePath == null) {
+            settings.backgroundStyleId ?: BackgroundStyles.DEFAULT_ID
+        } else {
+            null
+        }
+    )
         private set
     var wechatQrImagePath by mutableStateOf(settings.wechatQrImagePath)
         private set
@@ -118,11 +129,11 @@ class AdminViewModel(
         TpLog.i(TAG, "已选用内置背景样式 $id")
     }
 
-    /** 恢复默认背景：同时清除内置样式与自定义背景图，并删除图片文件。 */
+    /** 恢复默认背景：清除自定义背景图并回到默认样式（喜庆红），同时删除图片文件。 */
     fun clearBackground() {
         val previous = backgroundImagePath
-        backgroundStyleId = null
-        settings.backgroundStyleId = null
+        backgroundStyleId = BackgroundStyles.DEFAULT_ID
+        settings.backgroundStyleId = BackgroundStyles.DEFAULT_ID
         backgroundImagePath = null
         settings.backgroundImagePath = null
         imageStore.delete(previous)

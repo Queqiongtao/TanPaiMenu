@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.tanpai.menu.R
 import com.tanpai.menu.ui.theme.ChineseFontFamily
-import java.io.File
 import kotlinx.coroutines.delay
 
 /** 放大浮层展开后自动复原的时长。 */
@@ -53,10 +52,12 @@ private val WechatQrCardPadding = 24.dp
  *
  * 展开 [WECHAT_QR_AUTO_COLLAPSE_MILLIS] 毫秒后自动复原；期间点击任意位置（含卡片）立即复原。
  * 浮层由调用方按条件渲染，创建即开始计时、销毁即结束，重复展开不会叠加计时。
+ *
+ * [qrModel] 是 Coil 图片模型：店主上传时为 `File`，未上传时是内置默认二维码的资源 id。
  */
 @Composable
 fun WechatQrOverlay(
-    qrFile: File,
+    qrModel: Any,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -96,7 +97,7 @@ fun WechatQrOverlay(
                 color = MaterialTheme.colorScheme.primary
             )
             AsyncImage(
-                model = qrFile,
+                model = qrModel,
                 contentDescription = stringResource(R.string.display_wechat_qr_hint),
                 modifier = Modifier
                     .padding(top = 16.dp)

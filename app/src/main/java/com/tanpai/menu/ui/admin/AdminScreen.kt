@@ -558,7 +558,7 @@ private fun SettingsDialog(
                         onClick = {
                             onClearBackground()
                             backgroundSet = false
-                            selectedStyleId = null
+                            selectedStyleId = BackgroundStyles.DEFAULT_ID
                             failedTarget = null
                             deniedTarget = null
                         }
@@ -590,6 +590,13 @@ private fun SettingsDialog(
                     Text(stringResource(R.string.settings_background_scrim))
                     Text(text = (scrim * 100).roundToInt().toString() + "%")
                 }
+                Slider(
+                    value = scrim,
+                    onValueChange = { scrim = it },
+                    onValueChangeFinished = { onBackgroundScrimChange((scrim * 100).roundToInt()) },
+                    valueRange = 0f..0.8f,
+                    steps = 15
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -603,7 +610,7 @@ private fun SettingsDialog(
                             if (qrSet) {
                                 R.string.settings_wechat_qr_set
                             } else {
-                                R.string.settings_wechat_qr_none
+                                R.string.settings_wechat_qr_default
                             }
                         )
                     )
@@ -651,13 +658,6 @@ private fun SettingsDialog(
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
-                Slider(
-                    value = scrim,
-                    onValueChange = { scrim = it },
-                    onValueChangeFinished = { onBackgroundScrimChange((scrim * 100).roundToInt()) },
-                    valueRange = 0f..0.8f,
-                    steps = 15
-                )
                 TextButton(
                     onClick = { openHomeSettings(context) },
                     modifier = Modifier.padding(top = 8.dp)
