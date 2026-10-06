@@ -488,8 +488,8 @@ private fun SettingsDialog(
                     value = cardAlpha,
                     onValueChange = { cardAlpha = it },
                     onValueChangeFinished = { onCardAlphaChange((cardAlpha * 100).roundToInt()) },
-                    valueRange = 0.2f..1f,
-                    steps = 15
+                    valueRange = 0.15f..1f,
+                    steps = 16
                 )
                 Text(
                     text = stringResource(R.string.settings_background_style),

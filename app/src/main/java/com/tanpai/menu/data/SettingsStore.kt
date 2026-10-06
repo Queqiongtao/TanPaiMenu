@@ -105,9 +105,9 @@ class SettingsStore(context: Context) {
         const val KEY_SHOW_STOCK = "show_stock"
         const val KEY_CARD_ALPHA = "card_alpha"
         /** 卡片底不透明度默认值（百分比）。 */
-        const val DEFAULT_CARD_ALPHA_PERCENT = 75
+        const val DEFAULT_CARD_ALPHA_PERCENT = 15
         /** 卡片底不透明度下限（百分比），避免卡片完全隐形。 */
-        const val MIN_CARD_ALPHA_PERCENT = 20
+        const val MIN_CARD_ALPHA_PERCENT = 15
         const val KEY_BACKGROUND_IMAGE = "background_image"
         const val KEY_BACKGROUND_STYLE = "background_style"
         const val KEY_WECHAT_QR_IMAGE = "wechat_qr_image"
