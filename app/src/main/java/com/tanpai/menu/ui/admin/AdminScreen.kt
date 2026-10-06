@@ -8,10 +8,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -51,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -70,6 +74,13 @@ import com.tanpai.menu.ui.theme.BackgroundStyles
 import com.tanpai.menu.ui.theme.backgroundStyle
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+/** 分类侧栏最大宽度与占窗口宽的比例（竖屏 / 窄屏自动收窄）。 */
+private val SidebarMaxWidth = 320.dp
+private const val SidebarWidthFraction = 0.4f
+
+/** 窄于该宽度时菜品行改为「详情 + 操作」两行，避免按钮被裁切。 */
+private val NarrowDishRowWidth = 480.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,6 +125,9 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
         }
     }
 
+    // 侧栏宽度按窗口自适应：竖屏 / 窄屏收窄，保证菜名与操作按钮有可用宽度。
+    val sidebarWidth = minOf(SidebarMaxWidth, LocalConfiguration.current.screenWidthDp.dp * SidebarWidthFraction)
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -136,7 +150,7 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
         ) {
             Surface(
                 modifier = Modifier
-                    .width(320.dp)
+                    .width(sidebarWidth)
                     .fillMaxHeight(),
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {
@@ -804,39 +818,86 @@ private fun DishRow(
             parts += stringResource(R.string.display_in_stock)
         }
         val details = parts.joinToString(separator = "    ")
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = dish.name, style = MaterialTheme.typography.titleLarge)
-                Text(
-                    text = details,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (dish.stockEnabled) {
-                Button(onClick = onSell, enabled = !dish.soldOut) {
-                    Text(stringResource(R.string.admin_sell))
-                }
-                TextButton(onClick = onUnsell) {
-                    Text(stringResource(R.string.admin_unsell))
-                }
-            }
-            TextButton(onClick = { onSoldOutChange(!dish.soldOut) }) {
-                Text(
-                    stringResource(
-                        if (dish.soldOut) R.string.admin_restore else R.string.admin_sold_out_action
+        BoxWithConstraints(modifier = Modifier.padding(12.dp)) {
+            if (maxWidth < NarrowDishRowWidth) {
+                Column {
+                    DishRowDetails(name = dish.name, details = details)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    DishRowActions(
+                        dish = dish,
+                        onSell = onSell,
+                        onUnsell = onUnsell,
+                        onSoldOutChange = onSoldOutChange,
+                        onEdit = onEdit,
+                        onDelete = onDelete,
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
                     )
-                )
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    DishRowDetails(
+                        name = dish.name,
+                        details = details,
+                        modifier = Modifier.weight(1f)
+                    )
+                    DishRowActions(
+                        dish = dish,
+                        onSell = onSell,
+                        onUnsell = onUnsell,
+                        onSoldOutChange = onSoldOutChange,
+                        onEdit = onEdit,
+                        onDelete = onDelete
+                    )
+                }
             }
-            TextButton(onClick = onEdit) { Text(stringResource(R.string.admin_edit)) }
-            TextButton(onClick = onDelete) { Text(stringResource(R.string.admin_delete)) }
         }
     }
 }
 
+/** 菜品详情：菜名 + 「价格 / 单位 + 余量 / 状态」详情文字。 */
+@Composable
+private fun DishRowDetails(name: String, details: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(text = name, style = MaterialTheme.typography.titleLarge)
+        Text(
+            text = details,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** 菜品操作按钮：卖出 / 撤销（有库存时）+ 沽清 / 编辑 / 删除。 */
+@Composable
+private fun DishRowActions(
+    dish: Dish,
+    onSell: () -> Unit,
+    onUnsell: () -> Unit,
+    onSoldOutChange: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (dish.stockEnabled) {
+            Button(onClick = onSell, enabled = !dish.soldOut) {
+                Text(stringResource(R.string.admin_sell))
+            }
+            TextButton(onClick = onUnsell) {
+                Text(stringResource(R.string.admin_unsell))
+            }
+        }
+        TextButton(onClick = { onSoldOutChange(!dish.soldOut) }) {
+            Text(
+                stringResource(
+                    if (dish.soldOut) R.string.admin_restore else R.string.admin_sold_out_action
+                )
+            )
+        }
+        TextButton(onClick = onEdit) { Text(stringResource(R.string.admin_edit)) }
+        TextButton(onClick = onDelete) { Text(stringResource(R.string.admin_delete)) }
+    }
+}
 /** 样式色卡每行个数（3 列 × 2 行铺满 6 款样式）。 */
 private const val StyleGridColumns = 3
 

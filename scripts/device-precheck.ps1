@@ -140,7 +140,7 @@ $fence
 
 - ABI：$abiNote。
 - 内存：$memNote。
-- 分辨率与密度：$sizeFlat，$densityNote；横屏下展示页字号与卡片尺寸以此为准。
+- 分辨率与密度：$sizeFlat，$densityNote；展示页按可用宽高自动分档（横屏单行三列 / 竖屏两行卡片），字号与卡片尺寸按该密度换算。
 - 存储：/data 可用 $freeMb MB，容纳 APK 与菜品图片素材无压力。
 "@
 $outDir = Split-Path -Parent $OutputPath

@@ -1,6 +1,7 @@
 package com.tanpai.menu.ui.display
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -28,6 +29,10 @@ class DishCardTest {
         InstrumentationRegistry.getInstrumentation().targetContext
             .getString(R.string.display_sold_out)
 
+    private val inStockText: String =
+        InstrumentationRegistry.getInstrumentation().targetContext
+            .getString(R.string.display_in_stock)
+
     private fun dish(priceCents: Int, unit: String = "份", soldOut: Boolean = false) = Dish(
         categoryId = 1L,
         name = "原味鲜肉",
@@ -37,9 +42,15 @@ class DishCardTest {
         updatedAt = 0L
     )
 
-    private fun setCard(dish: Dish) {
+    private fun setCard(dish: Dish, spec: DisplaySpec = DisplaySpec.Default) {
         composeRule.setContent {
-            DishCard(dish = dish, modifier = Modifier.fillMaxWidth())
+            DishCard(
+                dish = dish,
+                spec = spec,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(spec.cardHeight)
+            )
         }
     }
 
@@ -70,6 +81,21 @@ class DishCardTest {
     @Test
     fun showsPriceAndSoldOutBadge() {
         setCard(dish(priceCents = 1000, soldOut = true))
+        composeRule.onNodeWithText("¥10 / 份").assertIsDisplayed()
+        composeRule.onNodeWithText(soldOutText).assertIsDisplayed()
+    }
+
+    @Test
+    fun twoRowCardShowsNamePriceAndStockHint() {
+        setCard(dish(priceCents = 1000), spec = DisplaySpec.TwoRowDefault)
+        composeRule.onNodeWithText("原味鲜肉").assertIsDisplayed()
+        composeRule.onNodeWithText("¥10 / 份").assertIsDisplayed()
+        composeRule.onNodeWithText(inStockText).assertIsDisplayed()
+    }
+
+    @Test
+    fun twoRowCardShowsSoldOutBadge() {
+        setCard(dish(priceCents = 1000, soldOut = true), spec = DisplaySpec.TwoRowDefault)
         composeRule.onNodeWithText("¥10 / 份").assertIsDisplayed()
         composeRule.onNodeWithText(soldOutText).assertIsDisplayed()
     }

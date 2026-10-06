@@ -32,4 +32,5 @@ df -h /data              -> Filesystem      Size  Used Avail Use% Mounted on
 - ABI：主 ABI 为 arm64-v8a：只需 arm64-v8a 单 ABI 包。
 - 内存：3955 MB 充足，可沿用默认 Coil 缓存策略。
 - 分辨率与密度：1600x2560，存在密度覆盖（Physical density: 320 / Override density: 426）：UI 按覆盖密度 426 设计；横屏下展示页字号与卡片尺寸以此为准。
+- 应用区（实测 `dumpsys window displays`，API 24）：横屏 2560×1472 px ≈ 961.5×552.9dp；竖屏 1600×2432 px ≈ 601×913.4dp（差值为底部导航栏 128px ≈ 48dp）。展示页按这两个尺寸分档：横屏单行三列 2 列、竖屏两行卡片 2 列，均 12 道一屏（见 `docs/design/0013-横竖屏与多尺寸自适应.md`）。
 - 存储：/data 可用 52224 MB，容纳 APK 与菜品图片素材无压力。
