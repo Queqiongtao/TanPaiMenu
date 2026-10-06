@@ -59,10 +59,12 @@ import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.kiosk.KeepScreenOn
+import com.tanpai.menu.ui.theme.BackgroundStyles
 import com.tanpai.menu.ui.theme.ChineseFontFamily
 import com.tanpai.menu.ui.theme.StatusColors
 import com.tanpai.menu.ui.theme.StoreNameColors
 import com.tanpai.menu.ui.theme.StoreNameFontFamily
+import com.tanpai.menu.ui.theme.backgroundStyle
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -125,6 +127,7 @@ fun DisplayScreen(
     showStockHint: Boolean,
     cardAlpha: Float = 1f,
     backgroundImagePath: String? = null,
+    backgroundStyleId: String? = null,
     backgroundScrim: Float = 0.3f,
     onRequestAdmin: () -> Unit,
     modifier: Modifier = Modifier
@@ -146,15 +149,26 @@ fun DisplayScreen(
 
     val context = LocalContext.current
     val backgroundFile = backgroundImagePath?.let { File(context.filesDir, it) }
+    val hasBackgroundImage = backgroundFile != null && backgroundFile.exists()
+    val backgroundStyle = BackgroundStyles.byId(backgroundStyleId)
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (backgroundFile != null && backgroundFile.exists()) {
-            AsyncImage(
+        // 背景优先级：自定义图 > 内置样式 > 不渲染（回退 M3 纯色底）。
+        when {
+            hasBackgroundImage -> AsyncImage(
                 model = backgroundFile,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
+
+            backgroundStyle != null -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .backgroundStyle(backgroundStyle)
+            )
+        }
+        if (hasBackgroundImage || backgroundStyle != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

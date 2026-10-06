@@ -62,6 +62,7 @@ fun TanPaiMenuApp(
             showStockHint = settings.showStockHint,
             cardAlpha = settings.cardAlphaPercent / 100f,
             backgroundImagePath = settings.backgroundImagePath,
+            backgroundStyleId = settings.backgroundStyleId,
             backgroundScrim = settings.backgroundScrimPercent / 100f,
             onRequestAdmin = {
                 pinDialog = if (pinManager.isPinSet()) PinDialog.Enter else PinDialog.Setup

@@ -6,19 +6,25 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +49,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -58,6 +65,9 @@ import com.tanpai.menu.domain.SellError
 import com.tanpai.menu.domain.SellResult
 import com.tanpai.menu.kiosk.exitToHome
 import com.tanpai.menu.kiosk.openHomeSettings
+import com.tanpai.menu.ui.theme.BackgroundStyle
+import com.tanpai.menu.ui.theme.BackgroundStyles
+import com.tanpai.menu.ui.theme.backgroundStyle
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -283,15 +293,17 @@ fun AdminScreen(viewModel: AdminViewModel, onExit: () -> Unit) {
             showStockHint = viewModel.showStockHint,
             cardAlphaPercent = viewModel.cardAlphaPercent,
             backgroundImagePath = viewModel.backgroundImagePath,
+            backgroundStyleId = viewModel.backgroundStyleId,
             backgroundScrimPercent = viewModel.backgroundScrimPercent,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAutostartChange = { viewModel.updateAutostart(it) },
             onShowStockHintChange = { viewModel.updateShowStockHint(it) },
             onCardAlphaChange = { viewModel.updateCardAlphaPercent(it) },
             onBackgroundScrimChange = { viewModel.updateBackgroundScrimPercent(it) },
+            onBackgroundStyleChange = { viewModel.applyBackgroundStyle(it) },
             onImportBackgroundImage = { uri -> viewModel.applyBackgroundImage(uri) },
             onCreateCaptureUri = { viewModel.createCaptureUri() },
-            onClearBackgroundImage = { viewModel.clearBackgroundImage() },
+            onClearBackground = { viewModel.clearBackground() },
             resetDone = resetDone,
             onResetSeed = { viewModel.resetToDefaultMenu() },
             onClearResetDone = { viewModel.clearResetDone() },
@@ -311,15 +323,17 @@ private fun SettingsDialog(
     showStockHint: Boolean,
     cardAlphaPercent: Int,
     backgroundImagePath: String?,
+    backgroundStyleId: String?,
     backgroundScrimPercent: Int,
     onStoreNameChange: (String) -> Unit,
     onAutostartChange: (Boolean) -> Unit,
     onShowStockHintChange: (Boolean) -> Unit,
     onCardAlphaChange: (Int) -> Unit,
     onBackgroundScrimChange: (Int) -> Unit,
+    onBackgroundStyleChange: (String) -> Unit,
     onImportBackgroundImage: suspend (Uri) -> Boolean,
     onCreateCaptureUri: () -> Uri,
-    onClearBackgroundImage: () -> Unit,
+    onClearBackground: () -> Unit,
     resetDone: Boolean,
     onResetSeed: () -> Unit,
     onClearResetDone: () -> Unit,
@@ -339,6 +353,7 @@ private fun SettingsDialog(
     var pendingImport by remember { mutableStateOf<Uri?>(null) }
     var scrim by remember { mutableStateOf(backgroundScrimPercent / 100f) }
     var backgroundSet by remember { mutableStateOf(backgroundImagePath != null) }
+    var selectedStyleId by remember { mutableStateOf(backgroundStyleId) }
     var importFailed by remember { mutableStateOf(false) }
     var permissionDenied by remember { mutableStateOf(false) }
     var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
@@ -359,6 +374,7 @@ private fun SettingsDialog(
             scope.launch {
                 if (onImportBackgroundImage(uri)) {
                     backgroundSet = true
+                    selectedStyleId = null
                     importFailed = false
                 } else {
                     importFailed = true
@@ -374,6 +390,7 @@ private fun SettingsDialog(
             scope.launch {
                 if (onImportBackgroundImage(uri)) {
                     backgroundSet = true
+                    selectedStyleId = null
                     importFailed = false
                 } else {
                     importFailed = true
@@ -441,6 +458,32 @@ private fun SettingsDialog(
                     valueRange = 0.2f..1f,
                     steps = 15
                 )
+                Text(
+                    text = stringResource(R.string.settings_background_style),
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+                BackgroundStyles.All.chunked(StyleGridColumns).forEach { rowStyles ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(StyleGridSpacing)
+                    ) {
+                        rowStyles.forEach { style ->
+                            BackgroundStyleCard(
+                                style = style,
+                                selected = style.id == selectedStyleId,
+                                onClick = {
+                                    onBackgroundStyleChange(style.id)
+                                    selectedStyleId = style.id
+                                    backgroundSet = false
+                                    importFailed = false
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -484,10 +527,11 @@ private fun SettingsDialog(
                         Text(stringResource(R.string.settings_background_capture))
                     }
                     TextButton(
-                        enabled = backgroundSet,
+                        enabled = backgroundSet || selectedStyleId != null,
                         onClick = {
-                            onClearBackgroundImage()
+                            onClearBackground()
                             backgroundSet = false
+                            selectedStyleId = null
                             importFailed = false
                         }
                     ) {
@@ -701,5 +745,78 @@ private fun DishRow(
             TextButton(onClick = onEdit) { Text(stringResource(R.string.admin_edit)) }
             TextButton(onClick = onDelete) { Text(stringResource(R.string.admin_delete)) }
         }
+    }
+}
+
+/** 样式色卡每行个数（3 列 × 2 行铺满 6 款样式）。 */
+private const val StyleGridColumns = 3
+
+/** 样式色卡之间的横向间距。 */
+private val StyleGridSpacing = 8.dp
+
+/** 样式色卡缩略图高度。 */
+private val StyleCardHeight = 64.dp
+
+/**
+ * 内置背景样式色卡：缩略渐变 + 中文名。
+ *
+ * 选中态用 2dp 主色描边 + 主色圆形对勾，未选中用 1dp 描边；两者形状与高度一致，切换不跳动。
+ */
+@Composable
+private fun BackgroundStyleCard(
+    style: BackgroundStyle,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = modifier.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(StyleCardHeight)
+                .clip(shape)
+                .backgroundStyle(style)
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant
+                    },
+                    shape = shape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selected) {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_background_style_check),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+        }
+        Text(
+            text = stringResource(style.labelRes),
+            modifier = Modifier.padding(top = 4.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 1
+        )
     }
 }

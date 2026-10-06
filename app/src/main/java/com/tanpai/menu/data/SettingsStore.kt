@@ -34,6 +34,15 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_BACKGROUND_IMAGE, null)?.takeIf { it.isNotBlank() }
         set(value) = prefs.edit().putString(KEY_BACKGROUND_IMAGE, value).apply()
 
+    /**
+     * 展示页内置背景样式 id，null 表示未选内置样式。
+     *
+     * 与 [backgroundImagePath] 互斥：同一时刻只有一种背景生效（由 ui/admin 在写入时保证）。
+     */
+    var backgroundStyleId: String?
+        get() = prefs.getString(KEY_BACKGROUND_STYLE, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit().putString(KEY_BACKGROUND_STYLE, value).apply()
+
     /** 展示页背景图上的白色蒙版不透明度（百分比，范围 0..80）。 */
     var backgroundScrimPercent: Int
         get() = prefs.getInt(KEY_BACKGROUND_SCRIM, DEFAULT_BACKGROUND_SCRIM_PERCENT)
@@ -91,6 +100,7 @@ class SettingsStore(context: Context) {
         /** 卡片底不透明度下限（百分比），避免卡片完全隐形。 */
         const val MIN_CARD_ALPHA_PERCENT = 20
         const val KEY_BACKGROUND_IMAGE = "background_image"
+        const val KEY_BACKGROUND_STYLE = "background_style"
         const val KEY_BACKGROUND_SCRIM = "background_scrim"
         /** 背景蒙版默认不透明度（百分比）。 */
         const val DEFAULT_BACKGROUND_SCRIM_PERCENT = 30

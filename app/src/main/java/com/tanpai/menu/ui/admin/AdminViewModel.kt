@@ -46,6 +46,8 @@ class AdminViewModel(
 
     var backgroundImagePath by mutableStateOf(settings.backgroundImagePath)
         private set
+    var backgroundStyleId by mutableStateOf(settings.backgroundStyleId)
+        private set
 
     var backgroundScrimPercent by mutableStateOf(settings.backgroundScrimPercent)
         private set
@@ -84,7 +86,9 @@ class AdminViewModel(
         settings.backgroundScrimPercent = value
     }
 
-    /** 导入并保存展示页背景图，成功后删除旧图；返回是否导入成功。 */
+    /**
+     * 导入并保存展示页背景图；成功后删除旧图并清空内置样式（两者互斥），返回是否导入成功。
+     */
     suspend fun applyBackgroundImage(uri: Uri): Boolean {
         val path = imageStore.importFromUri(
             uri,
@@ -94,18 +98,33 @@ class AdminViewModel(
         val previous = backgroundImagePath
         backgroundImagePath = path
         settings.backgroundImagePath = path
+        backgroundStyleId = null
+        settings.backgroundStyleId = null
         if (previous != null && previous != path) imageStore.delete(previous)
         TpLog.i(TAG, "已更新展示页背景图")
         return true
     }
 
-    /** 清除展示页背景图并删除对应文件。 */
-    fun clearBackgroundImage() {
+    /** 选用内置背景样式：写入样式 id，并清除自定义背景图与其文件（两者互斥）。 */
+    fun applyBackgroundStyle(id: String) {
         val previous = backgroundImagePath
+        backgroundStyleId = id
+        settings.backgroundStyleId = id
         backgroundImagePath = null
         settings.backgroundImagePath = null
         imageStore.delete(previous)
-        TpLog.i(TAG, "已清除展示页背景图")
+        TpLog.i(TAG, "已选用内置背景样式 $id")
+    }
+
+    /** 恢复默认背景：同时清除内置样式与自定义背景图，并删除图片文件。 */
+    fun clearBackground() {
+        val previous = backgroundImagePath
+        backgroundStyleId = null
+        settings.backgroundStyleId = null
+        backgroundImagePath = null
+        settings.backgroundImagePath = null
+        imageStore.delete(previous)
+        TpLog.i(TAG, "已恢复默认背景")
     }
 
     /** 清空菜单与图片并写回默认菜单，用于「恢复默认菜单」。 */
