@@ -23,7 +23,7 @@ app/src/main/java/com/tanpai/menu/
 ├─ net/         # REST 客户端、WS 客户端（Phase 3）
 ├─ ui/display/  # 顾客展示页（2 列 × 6 行横卡；自定义背景图与白色蒙版；内置字体见 ui/theme）
 ├─ ui/admin/    # 管理与设置页（双端共用）
-├─ ui/theme/    # 字体（Noto Sans SC Bold）、字型与展示页状态语义色（StatusColors）
+├─ ui/theme/    # 字体（Noto Sans SC Bold + 店名专用霞鹜文楷子集）、字型、展示页状态语义色与店名招牌配色
 ├─ ui/client/   # 手机客户端管理页（复用 admin 组件）
 ├─ imaging/     # 压缩、存储、加载
 ├─ backup/      # 备份格式（format 1）与导出 / 导入
@@ -38,7 +38,7 @@ Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`�
 ## 3. 关键流程与数据流
 
 - 展示：`data` 读 Room → `ui/display` 渲染；沽清卡片灰化并在行尾显示「已售完」徽标。
-- 展示布局：顶部条 44dp（店名 28sp 居中且带淡紫圆角胶囊 + 多分类时靠右的分类胶囊，长按店名 2 秒进管理）+ `GridCells.Fixed(2)` 横卡（左 56dp 方图 + 定宽三列：名称弹性 / 价格 100dp / 状态 68dp，均左对齐；菜名超宽跑马灯滚动）；卡片固定 68dp、行距 16dp、底部留白 24dp，12 道一屏、超出滚动；卡片底色按设置的不透明度（`SettingsStore.cardAlphaPercent`，默认 75%）叠加。字体 `ui/theme/Type.kt`（Noto Sans SC Bold，OFL 1.1，见 `docs/third-party/`）。
+- 展示布局：顶部条 72dp（店名 48sp 居中的渐变招牌——`StoreNameColors` 紫罗兰横向渐变底 + 1dp 半透明白描边 + 8dp 投影，`StoreNameFontFamily` 楷体子集，超 6 字降档 36sp，长按店名 2 秒进管理；多分类时靠右的分类胶囊 16sp）+ `GridCells.Fixed(2)` 横卡（左 56dp 方图 + 定宽三列：名称弹性 / 价格 100dp / 状态 68dp，均左对齐；菜名超宽跑马灯滚动）；卡片固定 68dp、列距 16dp、行距 12dp、底部留白 24dp，12 道一屏、超出滚动；卡片底色按设置的不透明度（`SettingsStore.cardAlphaPercent`，默认 75%）叠加。字体 `ui/theme/Type.kt`（菜名等 Noto Sans SC Bold，OFL 1.1；店名霞鹜文楷子集，OFL 1.1，见 `docs/third-party/`）。
 - 卖出：`ui/admin` 命令（乐观更新）→ REST → `host` 单写者队列 → 事务（写 `SaleRecord` + 扣库存 + 全局 `version` +1）→ WS 广播 → 各端应用。
 - 展示背景：`DisplayScreen` 在内容层下叠两层——`AsyncImage(ContentScale.Crop)` 整屏铺满 + 白色蒙版（`SettingsStore.backgroundScrimPercent`，默认 30%）；路径存 `SettingsStore.backgroundImagePath`，无图时不渲染任何背景层，见 `docs/design/0007-展示页背景图片.md`。
 - 同步：客户端 `/state` 全量对齐 + WS 事件增量；用 `version` 判新旧；断线重连重取快照。
@@ -103,3 +103,4 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-05 | 展示页店名放大到 28sp 并加淡紫圆角胶囊底 | 0006 |
 | 2026-10-05 | 展示页卡片固定 68dp（行距 16dp、底部留白 24dp），卡片底透明度可在设置中调整（`card_alpha`） | 0006 |
 | 2026-10-06 | 展示页支持自定义背景图（整屏铺满裁切 + 可调白色蒙版），启动孤儿图清理与恢复默认菜单保留背景图 | 0007 |
+| 2026-10-06 | 展示页店名 48sp 渐变招牌（描边 + 投影）并换用霞鹜文楷子集字体；顶栏 72dp、行距 12dp，12 道仍一屏 | 0008 |

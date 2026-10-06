@@ -2,6 +2,7 @@ package com.tanpai.menu.ui.display
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -41,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -58,11 +61,13 @@ import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.kiosk.KeepScreenOn
 import com.tanpai.menu.ui.theme.ChineseFontFamily
 import com.tanpai.menu.ui.theme.StatusColors
+import com.tanpai.menu.ui.theme.StoreNameColors
+import com.tanpai.menu.ui.theme.StoreNameFontFamily
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** 顶部条高度：店名与分类胶囊共用，高度固定不随内容伸缩。 */
-private val TopBarHeight = 44.dp
+/** 顶部条高度：店名招牌与分类胶囊共用，高度固定不随内容伸缩。 */
+private val TopBarHeight = 72.dp
 /** 店名最大宽度，超长省略，避免挤占分类胶囊位置。 */
 private val StoreNameMaxWidth = 320.dp
 /** 店名最大宽度占顶栏宽的比例（居中后左右各占 20%）。 */
@@ -74,11 +79,28 @@ private val ChipSpacing = 8.dp
 /** 长按店名进入管理的时长。 */
 private const val AdminLongPressMillis = 2_000L
 
+/** 店名招牌固定高度，垂直居中于顶部条内。 */
+private val StoreNameCapsuleHeight = 68.dp
+/** 店名招牌横向内边距。 */
+private val StoreNameHorizontalPadding = 20.dp
+/** 店名字号与行高（字数不超过 [StoreNameLongThreshold] 时）。 */
+private val StoreNameLargeSize = 48.sp
+private val StoreNameLargeLineHeight = 56.sp
+/** 店名过长时的降档字号与行高，避免在限宽内被省略。 */
+private val StoreNameSmallSize = 36.sp
+private val StoreNameSmallLineHeight = 44.sp
+/** 店名字数超过该值时降档。 */
+private const val StoreNameLongThreshold = 6
+
 private val ContentPadding = 12.dp
+/** 顶部条与网格之间的间距（顶栏加高后收紧）。 */
+private val TopBarGap = 8.dp
 /** 卡片固定高度：56dp 缩略图 + 上下各 6dp 内边距。 */
 private val CardHeight = 68.dp
-/** 卡片行距（行高变矮后放大行距，让 12 道仍铺满一屏）。 */
-private val CardSpacing = 16.dp
+/** 网格列间距，保持卡片宽度与既有版式一致。 */
+private val GridColumnSpacing = 16.dp
+/** 网格行间距（顶栏加高后收紧，保证 12 道一屏不滚动）。 */
+private val GridRowSpacing = 12.dp
 /** 网格底部留白。 */
 private val GridBottomPadding = 24.dp
 private val ThumbnailSize = 56.dp
@@ -151,7 +173,7 @@ fun DisplayScreen(
                 onSelect = { selectedCategoryId = it },
                 onRequestAdmin = onRequestAdmin
             )
-            Spacer(modifier = Modifier.height(CardSpacing))
+            Spacer(modifier = Modifier.height(TopBarGap))
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 when {
                     categories.isEmpty() -> CenterHint(stringResource(R.string.display_no_categories))
@@ -168,7 +190,7 @@ fun DisplayScreen(
 }
 
 /**
- * 顶部条：店名做成水平居中的淡紫圆角胶囊（长按 2 秒进入管理），分类胶囊靠右（仅多分类时出现）。
+ * 顶部条：店名做成水平居中的渐变招牌（紫罗兰渐变底 + 半透明白描边 + 投影，长按 2 秒进入管理），
  * 店名与胶囊分别限宽（0.4 / 0.3 顶栏宽），最大宽度之和不超过顶栏宽，保证不重叠。
  * 始终渲染，保证分类为空时管理入口仍可达。
  */
@@ -186,10 +208,32 @@ private fun DisplayTopBar(
             .height(TopBarHeight)
     ) {
         val storeNameMaxWidth = minOf(StoreNameMaxWidth, maxWidth * StoreNameWidthFraction)
-        Surface(
+        val displayName = storeName.ifBlank { stringResource(R.string.app_name) }
+        val nameTooLong = displayName.length > StoreNameLongThreshold
+        val nameStyle = MaterialTheme.typography.headlineSmall.copy(
+            fontSize = if (nameTooLong) StoreNameSmallSize else StoreNameLargeSize,
+            lineHeight = if (nameTooLong) StoreNameSmallLineHeight else StoreNameLargeLineHeight
+        )
+        val capsuleShape = RoundedCornerShape(50)
+        Box(
             modifier = Modifier
                 .align(Alignment.Center)
                 .widthIn(max = storeNameMaxWidth)
+                .height(StoreNameCapsuleHeight)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = capsuleShape,
+                    clip = false,
+                    ambientColor = StoreNameColors.Shadow,
+                    spotColor = StoreNameColors.Shadow
+                )
+                .clip(capsuleShape)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(StoreNameColors.GradientStart, StoreNameColors.GradientEnd)
+                    )
+                )
+                .border(width = 1.dp, color = StoreNameColors.Border, shape = capsuleShape)
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onPress = {
@@ -197,19 +241,15 @@ private fun DisplayTopBar(
                             if (released == null) onRequestAdmin()
                         }
                     )
-                },
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape(12.dp)
+                }
+                .padding(horizontal = StoreNameHorizontalPadding),
+            contentAlignment = Alignment.Center
         ) {
             Text(
-                text = storeName.ifBlank { stringResource(R.string.app_name) },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontSize = 28.sp,
-                    lineHeight = 34.sp
-                ),
-                fontFamily = ChineseFontFamily,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                text = displayName,
+                style = nameStyle,
+                fontFamily = StoreNameFontFamily,
+                color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -263,15 +303,16 @@ private fun CategoryChip(name: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * 2 列网格：卡片固定 [CardHeight] 高、行距 [CardSpacing]，12 道一屏铺满，超过 12 道则滚动。
+ * 2 列网格：卡片固定 [CardHeight] 高、列距 [GridColumnSpacing]、行距 [GridRowSpacing]，
+ * 12 道一屏铺满，超过 12 道则滚动。
  */
 @Composable
 private fun DishGrid(dishes: List<Dish>, showStockHint: Boolean, cardAlpha: Float) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(CardSpacing),
-        verticalArrangement = Arrangement.spacedBy(CardSpacing),
+        horizontalArrangement = Arrangement.spacedBy(GridColumnSpacing),
+        verticalArrangement = Arrangement.spacedBy(GridRowSpacing),
         contentPadding = PaddingValues(bottom = GridBottomPadding)
     ) {
         items(dishes, key = { it.id }) { dish ->
