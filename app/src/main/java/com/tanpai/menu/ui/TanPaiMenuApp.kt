@@ -50,7 +50,8 @@ fun TanPaiMenuApp(
     pinManager: PinManager,
     imageStore: ImageStore,
     backupManager: BackupManager,
-    hostStatus: HostStatusProvider
+    hostStatus: HostStatusProvider,
+    onSwitchToClient: () -> Unit
 ) {
     var screen by rememberSaveable { mutableStateOf(SCREEN_DISPLAY) }
     var pinDialog by remember { mutableStateOf(PinDialog.None) }
@@ -70,7 +71,8 @@ fun TanPaiMenuApp(
         AdminScreen(
             viewModel = adminViewModel,
             pinManager = pinManager,
-            onExit = { screen = SCREEN_DISPLAY }
+            onExit = { screen = SCREEN_DISPLAY },
+            onSwitchToClient = onSwitchToClient
         )
     } else {
         DisplayScreen(

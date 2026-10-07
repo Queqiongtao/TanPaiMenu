@@ -1,9 +1,10 @@
 package com.tanpai.menu.data
 
 import android.content.Context
+import android.os.Build
 import java.util.UUID
 
-class SettingsStore(context: Context) {
+class SettingsStore(context: Context) : PairCodeStore {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -128,6 +129,57 @@ class SettingsStore(context: Context) {
             return generated
         }
 
+    /**
+     * 设备角色：null 表示尚未选择（首启显示角色选择页，见 `docs/design/0018`）。
+     *
+     * 刻意不设默认值：默认成主机的话，手机端会建库、导默认菜单并启动前台服务。
+     */
+    var role: Role?
+        get() = Role.fromKey(prefs.getString(KEY_ROLE, null))
+        set(value) = prefs.edit().putString(KEY_ROLE, value?.key).apply()
+
+    /** 客户端上次配对的主机地址（`IP:端口` 原文）；未配对为 null。 */
+    var clientHostAddress: String?
+        get() = prefs.getString(KEY_CLIENT_HOST, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit().putString(KEY_CLIENT_HOST, value).apply()
+
+    /** 客户端持有的主机 token；与 [clientHostAddress] 同时存在才会尝试连接。 */
+    var clientToken: String?
+        get() = prefs.getString(KEY_CLIENT_TOKEN, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit().putString(KEY_CLIENT_TOKEN, value).apply()
+
+    /** 客户端设备名（默认取机型），注册到主机在线设备列表时使用。 */
+    var clientDeviceName: String
+        get() = prefs.getString(KEY_CLIENT_DEVICE_NAME, null)?.takeIf { it.isNotBlank() }
+            ?: Build.MODEL.orEmpty().ifBlank { DEFAULT_CLIENT_DEVICE_NAME }
+        set(value) = prefs.edit().putString(KEY_CLIENT_DEVICE_NAME, value).apply()
+
+    /** 当前一次性配对码；未点「显示配对码」时为 null。 */
+    override var pairCode: String?
+        get() = prefs.getString(KEY_PAIR_CODE, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit().putString(KEY_PAIR_CODE, value).apply()
+
+    override var pairCodeExpiresAt: Long
+        get() = prefs.getLong(KEY_PAIR_CODE_EXPIRES_AT, 0L)
+        set(value) = prefs.edit().putLong(KEY_PAIR_CODE_EXPIRES_AT, value).apply()
+
+    override var pairCodeFailures: Int
+        get() = prefs.getInt(KEY_PAIR_CODE_FAILURES, 0)
+        set(value) = prefs.edit().putInt(KEY_PAIR_CODE_FAILURES, value).apply()
+
+    override var pairCodeLockUntil: Long
+        get() = prefs.getLong(KEY_PAIR_CODE_LOCK_UNTIL, 0L)
+        set(value) = prefs.edit().putLong(KEY_PAIR_CODE_LOCK_UNTIL, value).apply()
+
+    override var pairedDeviceName: String?
+        get() = prefs.getString(KEY_PAIRED_DEVICE_NAME, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit().putString(KEY_PAIRED_DEVICE_NAME, value).apply()
+
+    /** 清除客户端配对信息（手机端「重新配对」时调用）。 */
+    fun clearClientPairing() {
+        prefs.edit().remove(KEY_CLIENT_HOST).remove(KEY_CLIENT_TOKEN).apply()
+    }
+
     private companion object {
         /** 默认店名（首启未设置店名时展示与回填使用）。 */
         const val DEFAULT_STORE_NAME = "大金馄饨"
@@ -158,6 +210,17 @@ class SettingsStore(context: Context) {
         const val KEY_PAIR_TOKEN = "pair_token"
         const val KEY_SERVER_PORT = "server_port"
         const val KEY_HOST_ENABLED = "host_enabled"
+        const val KEY_ROLE = "role"
+        const val KEY_CLIENT_HOST = "client_host"
+        const val KEY_CLIENT_TOKEN = "client_token"
+        const val KEY_CLIENT_DEVICE_NAME = "client_device_name"
+        /** 机型为空时的客户端设备名兜底。 */
+        const val DEFAULT_CLIENT_DEVICE_NAME = "未命名手机"
+        const val KEY_PAIR_CODE = "pair_code"
+        const val KEY_PAIR_CODE_EXPIRES_AT = "pair_code_expires_at"
+        const val KEY_PAIR_CODE_FAILURES = "pair_code_failures"
+        const val KEY_PAIR_CODE_LOCK_UNTIL = "pair_code_lock_until"
+        const val KEY_PAIRED_DEVICE_NAME = "paired_device_name"
         /** 配对码随机字节数（十六进制后 64 字符）。 */
         const val PAIR_TOKEN_BYTES = 32
         /** 主机服务默认端口。 */

@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.tanpai.menu.R
 import com.tanpai.menu.backup.BackupFailure
@@ -72,6 +73,7 @@ import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.domain.SellError
 import com.tanpai.menu.domain.SellResult
 import com.tanpai.menu.host.OnlineDevice
+import com.tanpai.menu.host.PairCodeStatus
 import com.tanpai.menu.net.protocol.DeviceRole
 import com.tanpai.menu.kiosk.exitToHome
 import com.tanpai.menu.kiosk.openHomeSettings
@@ -100,7 +102,8 @@ private const val HOST_REFRESH_INTERVAL_MS = 2_000L
 fun AdminScreen(
     viewModel: AdminViewModel,
     pinManager: PinManager,
-    onExit: () -> Unit
+    onExit: () -> Unit,
+    onSwitchToClient: () -> Unit
 ) {
     val menu by viewModel.menu.collectAsState()
     val backupResult by viewModel.backupResult.collectAsState()
@@ -367,6 +370,7 @@ fun AdminScreen(
             hostRunning = viewModel.hostRunning,
             hostAddress = viewModel.hostAddress,
             pairToken = viewModel.pairToken,
+            pairCodeStatus = viewModel.pairCodeStatus,
             hostQrBitmap = viewModel.hostQrBitmap,
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAutostartChange = { viewModel.updateAutostart(it) },
@@ -380,6 +384,8 @@ fun AdminScreen(
             onImportWechatQr = { uri -> viewModel.applyWechatQr(uri) },
             onClearWechatQr = { viewModel.clearWechatQr() },
             onRegeneratePairToken = { viewModel.regeneratePairToken() },
+            onGeneratePairCode = { viewModel.generatePairCode() },
+            onSwitchToClient = onSwitchToClient,
             onHostEnabledChange = { viewModel.applyHostEnabled(it) },
             onChangePin = {
                 showSettings = false
@@ -416,6 +422,7 @@ private fun SettingsDialog(
     hostRunning: Boolean,
     hostAddress: String?,
     pairToken: String,
+    pairCodeStatus: PairCodeStatus,
     hostQrBitmap: Bitmap?,
     onStoreNameChange: (String) -> Unit,
     onAutostartChange: (Boolean) -> Unit,
@@ -429,6 +436,8 @@ private fun SettingsDialog(
     onImportWechatQr: suspend (Uri) -> Boolean,
     onClearWechatQr: () -> Unit,
     onRegeneratePairToken: () -> Unit,
+    onGeneratePairCode: () -> Unit,
+    onSwitchToClient: () -> Unit,
     onHostEnabledChange: (Boolean) -> Unit,
     onChangePin: () -> Unit,
     onDisablePin: () -> Unit,
@@ -458,6 +467,7 @@ private fun SettingsDialog(
     var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
     var pendingTarget by remember { mutableStateOf<ImageTarget?>(null) }
     var confirmRegenerateToken by remember { mutableStateOf(false) }
+    var confirmSwitchToClient by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val importFailedText = stringResource(R.string.settings_background_import_failed)
     val permissionDeniedText = stringResource(R.string.settings_camera_permission_denied)
@@ -783,8 +793,52 @@ private fun SettingsDialog(
                         text = hostAddress ?: stringResource(R.string.settings_host_no_wifi),
                         style = MaterialTheme.typography.bodyMedium
                     )
+                    TextButton(onClick = onGeneratePairCode) {
+                        Text(
+                            stringResource(
+                                if (pairCodeStatus.code == null) {
+                                    R.string.settings_host_pair_code_show
+                                } else {
+                                    R.string.settings_host_pair_code_regenerate
+                                }
+                            )
+                        )
+                    }
+                    pairCodeStatus.code?.let { code ->
+                        Text(
+                            text = code,
+                            style = MaterialTheme.typography.headlineMedium,
+                            letterSpacing = 6.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.settings_host_pair_code_left,
+                                formatCountdown(pairCodeStatus.secondsLeft)
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (pairCodeStatus.lockedSeconds > 0) {
+                        Text(
+                            text = stringResource(
+                                R.string.settings_host_pair_code_locked,
+                                pairCodeStatus.lockedSeconds
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    pairCodeStatus.pairedDeviceName?.let { paired ->
+                        Text(
+                            text = stringResource(R.string.settings_host_paired_device, paired),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     Text(
-                        text = stringResource(R.string.settings_host_pair_code, pairToken),
+                        text = stringResource(R.string.settings_host_token, pairToken),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
@@ -876,6 +930,12 @@ private fun SettingsDialog(
                 ) {
                     Text(stringResource(R.string.settings_reset_seed))
                 }
+                TextButton(
+                    onClick = { confirmSwitchToClient = true },
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text(stringResource(R.string.settings_switch_to_client))
+                }
             }
         },
         confirmButton = {
@@ -914,6 +974,19 @@ private fun SettingsDialog(
             text = stringResource(R.string.settings_import_confirm),
             onConfirm = { onImportBackup(uri) },
             onDismiss = { pendingImport = null }
+        )
+    }
+
+    if (confirmSwitchToClient) {
+        ConfirmDialog(
+            title = stringResource(R.string.settings_switch_to_client),
+            text = stringResource(R.string.settings_switch_to_client_confirm),
+            onConfirm = {
+                confirmSwitchToClient = false
+                onDismiss()
+                onSwitchToClient()
+            },
+            onDismiss = { confirmSwitchToClient = false }
         )
     }
 
@@ -1165,6 +1238,12 @@ private enum class ImageTarget {
     WechatQr
 }
 
+
+/** 「剩余 mm:ss」倒计时文案；用于设置弹窗的一次性配对码有效期展示。 */
+private fun formatCountdown(totalSeconds: Int): String {
+    val safe = totalSeconds.coerceAtLeast(0)
+    return "%02d:%02d".format(safe / 60, safe % 60)
+}
 
 /** 在线设备角色文案：主机角色显示「平板」，其余显示「手机」。 */
 @Composable

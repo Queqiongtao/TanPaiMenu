@@ -45,8 +45,12 @@ class AdminViewModel(
     var hostAddress by mutableStateOf<String?>(null)
         private set
 
-    /** 当前配对码。 */
+    /** 主机长期令牌（已配对手机的凭据）。 */
     var pairToken by mutableStateOf(settings.pairToken)
+        private set
+
+    /** 一次性 6 位配对码状态（未点「显示配对码」时 code 为 null）。 */
+    var pairCodeStatus by mutableStateOf(hostStatus.pairCodeStatus())
         private set
 
     /** 配对二维码位图；地址不可用或编码失败时为 null。 */
@@ -133,6 +137,7 @@ class AdminViewModel(
         hostRunning = hostStatus.running
         hostAddress = hostStatus.address()
         pairToken = hostStatus.pairToken
+        pairCodeStatus = hostStatus.pairCodeStatus()
         hostQrBitmap = hostStatus.qrBitmap(HOST_QR_SIZE_PX)
         onlineDevices = hostStatus.onlineDevices()
     }
@@ -144,11 +149,18 @@ class AdminViewModel(
         refreshHostInfo()
     }
 
-    /** 更换配对码并断开现有客户端连接；二维码随之更新。 */
+    /** 更换长期令牌并断开现有客户端连接；二维码随之更新。 */
     fun regeneratePairToken() {
         pairToken = hostStatus.regeneratePairToken()
         hostQrBitmap = hostStatus.qrBitmap(HOST_QR_SIZE_PX)
-        TpLog.i(TAG, "已更换配对码")
+        TpLog.i(TAG, "已更换长期令牌")
+    }
+
+    /** 生成一次性 6 位配对码并刷新状态（旧码立即失效）。 */
+    fun generatePairCode() {
+        val code = hostStatus.generatePairCode()
+        pairCodeStatus = hostStatus.pairCodeStatus()
+        TpLog.i(TAG, "已生成配对码 $code")
     }
 
     /**

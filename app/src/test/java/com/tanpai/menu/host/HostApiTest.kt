@@ -8,6 +8,7 @@ import com.tanpai.menu.net.protocol.DishDto
 import com.tanpai.menu.net.protocol.DishPatchRequest
 import com.tanpai.menu.net.protocol.ErrorCode
 import com.tanpai.menu.net.protocol.ImageUploadDto
+import com.tanpai.menu.net.protocol.PairResponse
 import com.tanpai.menu.net.protocol.ProtocolJson
 import com.tanpai.menu.net.protocol.StateDto
 import kotlinx.coroutines.test.runTest
@@ -178,6 +179,73 @@ class HostApiTest {
         assertEquals(404, response.status)
     }
 
+    // ---- POST /pair：一次性配对码换 token（无需 Bearer，docs/design/0019 第 3 节）----
+
+    private fun pairingApi(verdict: PairVerdict) = HostApi(
+        backend = FakeBackend(),
+        tokenProvider = { token },
+        pairing = { _, _ -> verdict }
+    )
+
+    private val pairBody =
+        """{"code":"123456","deviceId":"phone-a","name":"手机A"}"""
+
+    @Test
+    fun pairWithoutBearerSucceeds() = runTest {
+        val response = pairingApi(PairVerdict.Ok)
+            .handlePair(request("POST", "/pair", pairBody, bearer = null))
+
+        assertEquals(200, response.status)
+        val body = ProtocolJson.decodeFromString(PairResponse.serializer(), response.bodyText)
+        assertEquals(token, body.token)
+        assertEquals(7L, body.version)
+    }
+
+    @Test
+    fun pairWithWrongCodeIsUnauthorized() = runTest {
+        val response = pairingApi(PairVerdict.Invalid)
+            .handlePair(request("POST", "/pair", pairBody, bearer = null))
+
+        assertEquals(401, response.status)
+        assertEquals(ErrorCode.UNAUTHORIZED, response.errorCode())
+    }
+
+    @Test
+    fun pairWhileLockedReportsRemainingSeconds() = runTest {
+        val response = pairingApi(PairVerdict.Locked(42))
+            .handlePair(request("POST", "/pair", pairBody, bearer = null))
+
+        assertEquals(401, response.status)
+        assertTrue(response.bodyText.contains("42"))
+    }
+
+    @Test
+    fun pairWithBadCodeFormatIsInvalidArgument() = runTest {
+        val body = """{"code":"12ab","deviceId":"phone-a","name":"手机A"}"""
+        val response = pairingApi(PairVerdict.Ok)
+            .handlePair(request("POST", "/pair", body, bearer = null))
+
+        assertEquals(400, response.status)
+        assertEquals(ErrorCode.INVALID_ARGUMENT, response.errorCode())
+    }
+
+    @Test
+    fun pairWithBlankDeviceIdIsInvalidArgument() = runTest {
+        val body = """{"code":"123456","deviceId":"","name":"手机A"}"""
+        val response = pairingApi(PairVerdict.Ok)
+            .handlePair(request("POST", "/pair", body, bearer = null))
+
+        assertEquals(400, response.status)
+    }
+
+    @Test
+    fun pairWithMalformedBodyIsInvalidArgument() = runTest {
+        val response = pairingApi(PairVerdict.Ok)
+            .handlePair(request("POST", "/pair", "{", bearer = null))
+
+        assertEquals(400, response.status)
+    }
+
     /** 内存替身：只实现管线断言所需的语义，真实写入由 `RepositoryMenuBackend` 覆盖。 */
     private class FakeBackend : MenuBackend {
 
@@ -193,6 +261,8 @@ class HostApiTest {
 
         var createDishCalls = 0
             private set
+
+        override suspend fun currentVersion(): Long = 7L
 
         override suspend fun state(): StateDto = StateDto(
             version = 7,

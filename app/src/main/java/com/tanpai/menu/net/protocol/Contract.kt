@@ -162,3 +162,28 @@ data class SellRequest(
     val deviceId: String,
     val requestId: String? = null
 )
+
+/**
+ * `POST /pair` 请求：用一次性 6 位配对码换取长期 token（`docs/design/0019` 第 3 节）。
+ *
+ * 该接口不需要 `Authorization`，是唯一在鉴权管线之外的写入口。
+ */
+@Serializable
+data class PairRequest(
+    val code: String,
+    val deviceId: String,
+    val name: String
+)
+
+/** `POST /pair` 响应：配对成功后客户端持有的凭据与当前主机版本。 */
+@Serializable
+data class PairResponse(
+    val token: String,
+    val version: Long
+)
+
+/** 删除类事件的 payload：`{"id":<id>}`。 */
+@Serializable
+data class IdPayload(
+    val id: Long
+)

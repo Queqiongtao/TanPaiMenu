@@ -68,6 +68,9 @@ class ImagePayload(val bytes: ByteArray, val contentType: String)
  * 列表语义遵循契约「软删除记录不出现在快照与列表中」，实现侧只返回 `enabled = true` 的数据。
  */
 interface MenuBackend {
+    /** 当前全局版本号；配对响应与设备上下线事件使用，避免重复构建完整快照。 */
+    suspend fun currentVersion(): Long
+
     suspend fun state(): StateDto
 
     suspend fun categories(): List<CategoryDto>

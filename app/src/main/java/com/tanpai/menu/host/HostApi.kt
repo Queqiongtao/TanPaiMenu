@@ -6,6 +6,8 @@ import com.tanpai.menu.net.protocol.DishCreateRequest
 import com.tanpai.menu.net.protocol.DishPatchRequest
 import com.tanpai.menu.net.protocol.ErrorCode
 import com.tanpai.menu.net.protocol.ImageUploadDto
+import com.tanpai.menu.net.protocol.PairRequest
+import com.tanpai.menu.net.protocol.PairResponse
 import com.tanpai.menu.net.protocol.ProtocolJson
 import com.tanpai.menu.net.protocol.SellRequest
 import kotlinx.serialization.encodeToString
@@ -24,6 +26,8 @@ class HostApi(
     private val backend: MenuBackend,
     private val tokenProvider: () -> String,
     private val logError: (String, Throwable?) -> Unit = { _, _ -> },
+    private val logInfo: (String) -> Unit = {},
+    private val pairing: PairCodeVerifier = PairCodeVerifier { _, _ -> PairVerdict.Invalid },
     private val cacheCapacity: Int = IDEMPOTENCY_CAPACITY,
     private val maxImageBytes: Int = MAX_IMAGE_BYTES
 ) {
@@ -71,6 +75,39 @@ class HostApi(
             )
         } catch (e: Exception) {
             internalError("POST /images", e)
+        }
+    }
+
+    /**
+     * `POST /pair`：用一次性 6 位配对码换取长期 token（`docs/design/0019` 第 3 节）。
+     *
+     * 与 [handleImageUpload] 一样由传输层在鉴权管线之外分流：配对时客户端还没有 token。
+     * 失败一律返回中文提示，锁定中附带剩余秒数。
+     */
+    suspend fun handlePair(request: HostRequest): HostResponse {
+        val text = request.body?.takeIf { it.isNotBlank() } ?: return invalidBody()
+        val parsed = runCatching { ProtocolJson.decodeFromString<PairRequest>(text) }.getOrNull()
+            ?: return invalidBody()
+        if (parsed.deviceId.isBlank()) {
+            return failure(400, ErrorCode.INVALID_ARGUMENT, "deviceId 不能为空")
+        }
+        if (!PairCodeManager.isValidFormat(parsed.code)) {
+            return failure(400, ErrorCode.INVALID_ARGUMENT, "配对码必须是 6 位数字")
+        }
+        val deviceName = parsed.name.trim().ifBlank { "未命名设备" }
+        return when (val verdict = pairing.verify(parsed.code, deviceName)) {
+            PairVerdict.Ok -> {
+                logInfo("配对成功：$deviceName（${parsed.deviceId}）")
+                json(200, encodeJson(PairResponse(tokenProvider(), backend.currentVersion())))
+            }
+
+            is PairVerdict.Locked ->
+                failure(401, ErrorCode.UNAUTHORIZED, "配对码已锁定，请 ${verdict.remainingSeconds} 秒后重试")
+
+            PairVerdict.Invalid -> {
+                logInfo("配对失败：配对码错误或已过期")
+                failure(401, ErrorCode.UNAUTHORIZED, "配对码错误或已过期")
+            }
         }
     }
 

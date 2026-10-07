@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.nanohttpd.core)
     implementation(libs.nanohttpd.websocket)
     implementation(libs.zxing.core)
+    implementation(libs.okhttp.core)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

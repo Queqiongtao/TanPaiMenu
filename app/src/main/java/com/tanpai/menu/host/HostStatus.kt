@@ -13,7 +13,8 @@ import com.tanpai.menu.data.SettingsStore
 class HostStatusProvider(
     private val context: Context,
     private val settings: SettingsStore,
-    private val server: () -> HostServer?
+    private val server: () -> HostServer?,
+    private val pairCode: PairCodeManager
 ) {
 
     /** 服务是否在监听；端口全部被占用时为 false。 */
@@ -56,7 +57,13 @@ class HostStatusProvider(
     /** 当前在线设备快照（docs/design/0016 第 2.4 节）；服务未启动时为空。 */
     fun onlineDevices(): List<OnlineDevice> = server()?.onlineDevices().orEmpty()
 
-    /** 更换配对码并断开现有连接（旧码立即失效），返回新码。 */
+    /** 设置页「显示配对码」：生成一次性 6 位配对码（覆盖旧码并清零失败计数）。 */
+    fun generatePairCode(): String = pairCode.generate()
+
+    /** 当前一次性配对码状态：码、剩余秒数、锁定剩余秒数与最近配对的设备名。 */
+    fun pairCodeStatus(): PairCodeStatus = pairCode.status()
+
+    /** 更换长期令牌并断开现有连接（旧令牌立即失效），返回新令牌。 */
     fun regeneratePairToken(): String {
         val token = settings.regeneratePairToken()
         server()?.kickAllConnections()

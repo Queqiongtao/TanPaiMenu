@@ -2,23 +2,33 @@ package com.tanpai.menu
 
 import android.app.Application
 import android.content.Context
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import com.tanpai.menu.backup.BackupManager
+import com.tanpai.menu.client.ClientSession
+import com.tanpai.menu.client.PairingClient
 import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.PinManager
+import com.tanpai.menu.data.Role
 import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.data.db.TpDatabase
 import com.tanpai.menu.host.HostApi
 import com.tanpai.menu.host.HostInfo
-import com.tanpai.menu.host.HostService
 import com.tanpai.menu.host.HostServer
+import com.tanpai.menu.host.HostService
 import com.tanpai.menu.host.HostStatusProvider
+import com.tanpai.menu.host.PairCodeManager
 import com.tanpai.menu.host.RepositoryMenuBackend
 import com.tanpai.menu.imaging.ImageStore
 import com.tanpai.menu.logging.TpLog
+import com.tanpai.menu.net.HostRestClient
+import com.tanpai.menu.net.MenuSocketClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 class AppContainer(context: Context) {
     val database: TpDatabase = TpDatabase.build(context)
@@ -27,6 +37,9 @@ class AppContainer(context: Context) {
     val settingsStore: SettingsStore = SettingsStore(context)
     val pinManager: PinManager = PinManager(settingsStore)
     val backupManager: BackupManager = BackupManager(context, menuRepository, imageStore)
+
+    /** 一次性 6 位配对码（`docs/design/0019` 第 2.1 节）。 */
+    val pairCodeManager: PairCodeManager = PairCodeManager(settingsStore)
 
     /** 主机业务窄接口实现：HTTP 管线与 WS 广播共用。 */
     val menuBackend: RepositoryMenuBackend = RepositoryMenuBackend(
@@ -38,17 +51,48 @@ class AppContainer(context: Context) {
     val hostApi: HostApi = HostApi(
         backend = menuBackend,
         tokenProvider = { settingsStore.pairToken },
-        logError = { message, throwable -> TpLog.e("host", message, throwable) }
+        logError = { message, throwable -> TpLog.e("host", message, throwable) },
+        logInfo = { message -> TpLog.i("host", message) },
+        pairing = pairCodeManager
     )
 
-    /** 主机服务实例：`App.onCreate` 启动成功后赋值，全为 null 表示未启动。 */
+    /** 主机服务实例：启动成功后赋值，全为 null 表示未启动。 */
     var hostServer: HostServer? = null
 
-    val hostStatus: HostStatusProvider =
-        HostStatusProvider(context.applicationContext, settingsStore) { hostServer }
+    val hostStatus: HostStatusProvider = HostStatusProvider(
+        context = context.applicationContext,
+        settings = settingsStore,
+        server = { hostServer },
+        pairCode = pairCodeManager
+    )
+
+    /** REST 用 OkHttp：连接与读取超时都收紧到 5 秒，避免手机端长时间卡在「连接中」。 */
+    private val restHttpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
+
+    /** WS 用独立 OkHttp：不设读超时，靠 20 秒 ping 保活并探测掉线（与服务端心跳呼应）。 */
+    private val socketHttpClient: OkHttpClient = restHttpClient.newBuilder()
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .pingInterval(WS_PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
+        .build()
+
+    val clientRest: HostRestClient = HostRestClient(restHttpClient)
+    val clientSockets: MenuSocketClient = MenuSocketClient(socketHttpClient)
+
+    /** 客户端连接会话；未配对时不产生任何网络请求。 */
+    val clientSession: ClientSession = ClientSession(settingsStore, clientRest, clientSockets)
+
+    val pairingClient: PairingClient = PairingClient(clientRest, settingsStore)
+
+    private companion object {
+        const val HTTP_TIMEOUT_SECONDS = 5L
+        const val WS_PING_INTERVAL_SECONDS = 20L
+    }
 }
 
-class App : Application() {
+class App : Application(), ImageLoaderFactory {
 
     lateinit var container: AppContainer
         private set
@@ -60,6 +104,19 @@ class App : Application() {
         TpLog.init(this)
         TpLog.i("app", "应用启动")
         container = AppContainer(this)
+        when (container.settingsStore.role) {
+            Role.HOST -> enterHostMode()
+            Role.CLIENT -> {
+                TpLog.i("app", "以手机客户端形态启动")
+                container.clientSession.start()
+            }
+
+            null -> TpLog.i("app", "尚未选择角色，等待用户在角色选择页选择")
+        }
+    }
+
+    /** 幂等进入主机形态：导默认菜单、清理孤儿图并拉起前台服务（`docs/design/0018` 第 2.2 节）。 */
+    fun enterHostMode() {
         appScope.launch {
             runCatching {
                 container.menuRepository.seedIfEmpty()
@@ -78,6 +135,24 @@ class App : Application() {
                     TpLog.i("host", "手机控制端已关闭，不启动主机服务")
                 }
             }.onFailure { TpLog.e("host", "主机前台服务启动异常", it) }
+        }
+    }
+
+    /** 切换角色：落盘并即时启停两套形态的后台任务（界面分流由 MainActivity 负责）。 */
+    fun applyRole(role: Role) {
+        if (container.settingsStore.role == role) return
+        container.settingsStore.role = role
+        TpLog.i("app", "切换角色为 ${role.key}")
+        when (role) {
+            Role.HOST -> {
+                container.clientSession.stop()
+                enterHostMode()
+            }
+
+            Role.CLIENT -> {
+                HostService.stop(this)
+                container.clientSession.start()
+            }
         }
     }
 
@@ -123,6 +198,33 @@ class App : Application() {
                 ?: "（未获取到局域网地址）"
             TpLog.i("host", "配对信息：$address 配对码 ${container.settingsStore.pairToken}")
         }
+    }
+
+    /**
+     * 客户端形态下读取主机图片需要 `Authorization` 头；主机形态加载本地文件不经过 OkHttp，
+     * 因此这里统一附加，未配对时（token 为空）不附加任何头。
+     */
+    override fun newImageLoader(): ImageLoader {
+        val settings = SettingsStore(this)
+        return ImageLoader.Builder(this)
+            .okHttpClient {
+                OkHttpClient.Builder()
+                    .addInterceptor { chain ->
+                        val token = settings.clientToken
+                        val request = chain.request()
+                        if (token.isNullOrBlank()) {
+                            chain.proceed(request)
+                        } else {
+                            chain.proceed(
+                                request.newBuilder()
+                                    .header("Authorization", "Bearer $token")
+                                    .build()
+                            )
+                        }
+                    }
+                    .build()
+            }
+            .build()
     }
 
     private companion object {

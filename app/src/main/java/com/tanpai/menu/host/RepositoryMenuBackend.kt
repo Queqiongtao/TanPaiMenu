@@ -145,8 +145,7 @@ class RepositoryMenuBackend(
         return ImagePayload(bytes, contentType)
     }
 
-    /** 当前全局版本号；设备上下线事件帧用，避免为取版本构建完整快照。 */
-    suspend fun currentVersion(): Long = repository.currentVersion()
+    override suspend fun currentVersion(): Long = repository.currentVersion()
 
     /** 设备注册表写入：WS 连接建立时登记 / 刷新。 */
     suspend fun upsertDevice(id: String, name: String, role: String) {

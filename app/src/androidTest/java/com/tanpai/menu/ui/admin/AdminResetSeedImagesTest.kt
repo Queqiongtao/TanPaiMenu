@@ -9,6 +9,7 @@ import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.data.db.TpDatabase
 import com.tanpai.menu.host.HostStatusProvider
+import com.tanpai.menu.host.PairCodeManager
 import com.tanpai.menu.imaging.ImageStore
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +62,7 @@ class AdminResetSeedImagesTest {
             settings,
             store,
             BackupManager(context, repository, store),
-            HostStatusProvider(context, settings) { null }
+            HostStatusProvider(context, settings, { null }, PairCodeManager(settings))
         )
 
         viewModel.resetToDefaultMenu()

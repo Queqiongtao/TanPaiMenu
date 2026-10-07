@@ -120,6 +120,8 @@ class HostServer private constructor(
         return try {
             if (path.trimEnd('/') == IMAGES_PATH && session.method == NanoHTTPD.Method.POST) {
                 handleImageUpload(session)
+            } else if (path.trimEnd('/') == PAIR_PATH && session.method == NanoHTTPD.Method.POST) {
+                handlePairing(session)
             } else {
                 val request = HostRequest(
                     method = session.method.name,
@@ -168,6 +170,19 @@ class HostServer private constructor(
             read += count
         }
         return if (read == 0) null else String(bytes, 0, read, Charsets.UTF_8)
+    }
+
+    /**
+     * `POST /pair`：配对码换 token，唯一不经过鉴权管线的 JSON 接口（`docs/design/0019` 第 3 节）。
+     */
+    private fun handlePairing(session: IHTTPSession): Response {
+        val request = HostRequest(
+            method = NanoHTTPD.Method.POST.name,
+            path = PAIR_PATH,
+            headers = session.headers ?: emptyMap(),
+            body = readBody(session)
+        )
+        return toResponse(runBlocking { api.handlePair(request) })
     }
 
     /**
@@ -340,6 +355,9 @@ class HostServer private constructor(
 
         /** 单张图片上限。 */
         private const val MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+        /** 配对接口路径（去掉 `/api/v1` 前缀后）。 */
+        private const val PAIR_PATH = "/pair"
 
         /** 连接空闲读超时（毫秒）。 */
         /**
