@@ -24,6 +24,7 @@ import com.tanpai.menu.R
 import com.tanpai.menu.backup.BackupManager
 import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.PinManager
+import com.tanpai.menu.data.DisplaySettingsState
 import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.host.HostStatusProvider
 import com.tanpai.menu.imaging.ImageStore
@@ -51,7 +52,9 @@ fun TanPaiMenuApp(
     imageStore: ImageStore,
     backupManager: BackupManager,
     hostStatus: HostStatusProvider,
-    onSwitchToClient: () -> Unit
+    onSwitchToClient: () -> Unit,
+    /** 展示设置的可观察状态；与主机后端共用同一实例，手机端改设置后展示页立即刷新。 */
+    displaySettings: DisplaySettingsState = DisplaySettingsState(settings)
 ) {
     var screen by rememberSaveable { mutableStateOf(SCREEN_DISPLAY) }
     var pinDialog by remember { mutableStateOf(PinDialog.None) }
@@ -63,7 +66,7 @@ fun TanPaiMenuApp(
     val adminViewModel: AdminViewModel =
         viewModel(
             factory = AdminViewModel.factory(
-                repository, settings, imageStore, backupManager, hostStatus
+                repository, settings, imageStore, backupManager, hostStatus, displaySettings
             )
         )
 
@@ -78,12 +81,13 @@ fun TanPaiMenuApp(
         DisplayScreen(
             viewModel = displayViewModel,
             storeName = settings.displayStoreName,
-            showStockHint = settings.showStockHint,
+            // 展示相关取值统一来自可观察状态：手机端改设置后这里会自动重组（docs/design/0023 第 2.4 节）。
+            showStockHint = displaySettings.value.showStockHint,
             autoScrollEnabled = settings.autoScrollEnabled,
-            cardAlpha = settings.cardAlphaPercent / 100f,
-            backgroundImagePath = settings.backgroundImagePath,
-            backgroundStyleId = settings.backgroundStyleId,
-            backgroundScrim = settings.backgroundScrimPercent / 100f,
+            cardAlpha = displaySettings.value.cardAlphaPercent / 100f,
+            backgroundImagePath = displaySettings.value.backgroundImagePath,
+            backgroundStyleId = displaySettings.value.backgroundStyleId,
+            backgroundScrim = displaySettings.value.backgroundScrimPercent / 100f,
             wechatQrImagePath = settings.wechatQrImagePath,
             onRequestAdmin = {
                 pinDialog = if (pinManager.isPinSet()) PinDialog.Enter else PinDialog.Setup

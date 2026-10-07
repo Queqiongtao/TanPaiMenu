@@ -212,7 +212,9 @@ class HostServer private constructor(
             headers = session.headers ?: emptyMap()
         )
         val response = runBlocking {
-            api.handleImageUpload(request.bearerToken, sniffImageType(bytes), bytes)
+            // `?kind=background` 按背景图规格落盘（`docs/design/0023` 第 2.3 节）。
+            val kind = session.parameters?.get("kind")?.firstOrNull()
+            api.handleImageUpload(request.bearerToken, sniffImageType(bytes), bytes, kind)
         }
         return toResponse(response)
     }
@@ -230,10 +232,11 @@ class HostServer private constructor(
     }
 
     private suspend fun broadcastChange(change: MenuChange) {
-        val event = if (change is MenuChange.FullReload) {
-            hub.snapshotEvent(backend.state())
-        } else {
-            hub.changeEvent(change) ?: return
+        val event = when (change) {
+            is MenuChange.FullReload -> hub.snapshotEvent(backend.state())
+            // 展示设置：载荷是完整设置对象，单独构造（`docs/design/0023` 第 2.2 节）。
+            is MenuChange.DisplayUpdated -> hub.displayEvent(backend.display(), change.version)
+            else -> hub.changeEvent(change) ?: return
         }
         val sent = hub.broadcast(event)
         if (sent > 0) logInfo("已广播 ${event.type}（版本 ${event.version}）给 $sent 个连接")

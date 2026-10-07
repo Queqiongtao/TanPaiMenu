@@ -53,6 +53,17 @@ class ImageStore(private val context: Context) {
     }
 
     /**
+     * 从内存字节导入**背景图**（手机端 `POST /images?kind=background`，`docs/design/0023` 第 2.3 节）：
+     * 长边 ≤ [BACKGROUND_MAX_EDGE]、JPEG [BACKGROUND_JPEG_QUALITY]，与平板相册导入同规格；
+     * 解码失败返回 null。
+     */
+    suspend fun importBackgroundFromBytes(bytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        val bitmap = decodeScaled(ByteArrayInputStream(bytes), BACKGROUND_MAX_EDGE)
+            ?: return@withContext null
+        saveBitmap(bitmap, "jpg", Bitmap.CompressFormat.JPEG, BACKGROUND_JPEG_QUALITY)
+    }
+
+    /**
      * 导入内置默认菜品图：从 `assets/[SEED_ASSETS_DIR]` 读取并压缩保存，返回相对路径。
      * asset 缺失或解码失败返回 null，调用方按「无图」处理。
      */

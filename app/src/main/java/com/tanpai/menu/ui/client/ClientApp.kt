@@ -19,6 +19,9 @@ import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.imaging.ImageCompressor
 import kotlinx.coroutines.launch
 
+/** 手机端上传背景图前的长边上限，与主机侧背景图规格一致（`docs/design/0023` 第 2.3 节）。 */
+private const val BACKGROUND_UPLOAD_MAX_EDGE = 2048
+
 /**
  * 手机客户端运行形态的根界面（`docs/design/0018` 第 2.2 节、`docs/design/0020` 第 2.1 节）。
  *
@@ -32,16 +35,20 @@ fun ClientApp(
     pairingClient: PairingClient,
     settings: SettingsStore,
     onCreateCaptureUri: () -> Uri,
-    onSwitchToHost: () -> Unit
+    onSwitchToHost: () -> Unit,
+    /** 深链接带来的配对内容（`tanpai://pair?content=...`），非空时自动配对一次。 */
+    pairLink: String? = null
 ) {
     val state by session.state.collectAsState()
     var paired by remember { mutableStateOf(session.isPaired) }
     var showSettings by remember { mutableStateOf(false) }
+    var showDisplay by remember { mutableStateOf(false) }
     var adminMode by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uploadFailedText = stringResource(R.string.client_image_upload_failed)
+    val backgroundUploadFailedText = stringResource(R.string.client_display_upload_failed)
 
     LaunchedEffect(paired) {
         if (paired) session.start() else session.stop()
@@ -58,7 +65,8 @@ fun ClientApp(
             initialAddress = settings.clientHostAddress.orEmpty(),
             initialDeviceName = settings.clientDeviceName,
             onPaired = { paired = true },
-            onSwitchToHost = onSwitchToHost
+            onSwitchToHost = onSwitchToHost,
+            pairLink = pairLink
         )
         return
     }
@@ -68,6 +76,18 @@ fun ClientApp(
         val bytes = ImageCompressor.compressToJpegBytes(context, uri)
         val path = bytes?.let { session.uploadImage(it).getOrNull() }
         if (path == null) scope.launch { snackbarHostState.showSnackbar(uploadFailedText) }
+        path
+    }
+
+    /** 相册选背景图 → 本机压到长边 2048 → 走 `?kind=background` 上传，返回主机路径。 */
+    val onUploadBackground: suspend (Uri) -> String? = { uri ->
+        val bytes = ImageCompressor.compressToJpegBytes(
+            context,
+            uri,
+            maxEdge = BACKGROUND_UPLOAD_MAX_EDGE
+        )
+        val path = bytes?.let { session.uploadBackgroundImage(it).getOrNull() }
+        if (path == null) scope.launch { snackbarHostState.showSnackbar(backgroundUploadFailedText) }
         path
     }
 
@@ -85,6 +105,10 @@ fun ClientApp(
     if (showSettings) {
         ClientSettingsDialog(
             state = state,
+            onOpenDisplay = {
+                showSettings = false
+                showDisplay = true
+            },
             onReconnect = { session.reconnect() },
             onRepair = {
                 showSettings = false
@@ -93,6 +117,17 @@ fun ClientApp(
             },
             onSwitchToHost = onSwitchToHost,
             onDismiss = { showSettings = false }
+        )
+    }
+
+    if (showDisplay) {
+        ClientDisplayDialog(
+            display = state.display,
+            enabled = state.canEdit,
+            onUploadBackground = onUploadBackground,
+            onSubmit = { patch -> session.updateDisplay(patch) },
+            onDismiss = { showDisplay = false },
+            onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } }
         )
     }
 }

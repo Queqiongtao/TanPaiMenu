@@ -153,7 +153,13 @@
     <string name="role_select_client_desc">连接另一台平板，随时查看菜单</string>
 
     <string name="client_connect_title">连接平板</string>
-    <string name="client_connect_desc">在平板上打开「设置 → 手机控制端 → 显示配对码」，再填入下面的地址与 6 位配对码。</string>
+    <string name="client_connect_desc">在平板上打开「设置 → 手机控制端」；也可以点「显示配对码」，再填入下面的地址与 6 位配对码。</string>
+    <string name="client_connect_desc_scan">把平板放在同一 Wi-Fi 下，手机对着平板屏幕上的二维码即可自动连接。</string>
+    <string name="client_scan_hint">对准平板上的配对二维码</string>
+    <string name="client_scan_switch">改用扫码配对</string>
+    <string name="client_scan_permission_hint">已切换到手动配对。若要扫码，请在系统设置里允许本应用使用相机。</string>
+    <string name="client_scan_permission_denied">未获得相机权限，已切换到手动配对。可手输地址与配对码完成连接。</string>
+    <string name="client_manual_pair">手动配对（地址 + 配对码）</string>
     <string name="client_address_label">平板地址</string>
     <string name="client_address_placeholder">192.168.1.5:8080</string>
     <string name="client_code_label">6 位配对码</string>
@@ -195,4 +201,17 @@
     <string name="client_edit_disabled_hint">请在平板「设置 → 手机控制端」中打开「允许手机编辑」</string>
     <string name="client_image_upload_failed">图片上传失败，请重试或稍后再试</string>
     <string name="client_retry">重试</string>
+
+    <!-- 手机端展示设置（docs/design/0023） -->
+    <string name="client_display_title">展示设置</string>
+    <string name="client_display_background">背景样式（平板展示页）</string>
+    <string name="client_display_image_none">当前使用内置样式</string>
+    <string name="client_display_image_set">当前使用自定义背景图</string>
+    <string name="client_display_pick_image">选相册图片</string>
+    <string name="client_display_clear_image">清除</string>
+    <string name="client_display_scrim">背景蒙版透明度：%1$d%%</string>
+    <string name="client_display_card_alpha">卡片透明度：%1$d%%</string>
+    <string name="client_display_show_stock">显示有货 / 已售完提示</string>
+    <string name="client_display_saved">展示设置已同步到平板</string>
+    <string name="client_display_upload_failed">背景图上传失败，请重试（需与平板同一 Wi-Fi）</string>
 </resources>

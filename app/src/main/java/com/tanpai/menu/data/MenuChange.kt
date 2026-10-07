@@ -28,4 +28,12 @@ sealed interface MenuChange {
 
     /** 整库替换（导入备份 / 首启种子）：对端应重新拉取 `/state`。 */
     data class FullReload(override val version: Long) : MenuChange
+
+    /**
+     * 展示设置变更（`docs/design/0023` 第 2.2 节）。
+     *
+     * [version] 沿用当前全局版本（展示设置与菜单数据无关，不 bump）；
+     * 客户端不复用「版本前进」判据，而是比对设置内容。
+     */
+    data class DisplayUpdated(override val version: Long) : MenuChange
 }

@@ -12,6 +12,8 @@ import com.tanpai.menu.backup.BackupManager
 import com.tanpai.menu.backup.BackupResult
 import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.MenuSnapshot
+import com.tanpai.menu.data.DisplaySettingsState
+import com.tanpai.menu.net.protocol.DisplayPatchRequest
 import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.SellResult
@@ -32,7 +34,9 @@ class AdminViewModel(
     private val settings: SettingsStore,
     private val imageStore: ImageStore,
     private val backupManager: BackupManager,
-    private val hostStatus: HostStatusProvider
+    private val hostStatus: HostStatusProvider,
+    /** 展示设置状态（`docs/design/0023`）：与展示页共用同一实例，改完两处都刷新。 */
+    private val displaySettings: DisplaySettingsState
 ) : ViewModel() {
 
     val deviceId: String = settings.deviceId
@@ -75,34 +79,46 @@ class AdminViewModel(
     var autostartEnabled by mutableStateOf(settings.autostartEnabled)
         private set
 
-    var showStockHint by mutableStateOf(settings.showStockHint)
-        private set
+    /** 是否有货提示；读写都经 [displaySettings]，避免与展示页各存一份。 */
+    var showStockHint: Boolean
+        get() = displaySettings.value.showStockHint
+        private set(value) {
+            displaySettings.applyDisplay(DisplayPatchRequest(showStockHint = value))
+        }
 
     var autoScrollEnabled by mutableStateOf(settings.autoScrollEnabled)
         private set
 
-    var cardAlphaPercent by mutableStateOf(settings.cardAlphaPercent)
-        private set
+    /** 卡片透明度；读写都经 [displaySettings]。 */
+    var cardAlphaPercent: Int
+        get() = displaySettings.value.cardAlphaPercent
+        private set(value) {
+            displaySettings.applyDisplay(DisplayPatchRequest(cardAlphaPercent = value))
+        }
 
-    var backgroundImagePath by mutableStateOf(settings.backgroundImagePath)
-        private set
+    var backgroundImagePath: String?
+        get() = displaySettings.value.backgroundImagePath
+        private set(value) {
+            displaySettings.applyDisplay(DisplayPatchRequest(backgroundImagePath = value.orEmpty()))
+        }
+
     /**
      * 设置页当前选中的内置样式；null 表示正在使用自定义背景图（此时不高亮任何样式卡）。
      * 未设置过背景时回退默认样式「喜庆红」，与实际展示页一致。
      */
-    var backgroundStyleId by mutableStateOf(
-        if (settings.backgroundImagePath == null) {
-            settings.backgroundStyleId ?: BackgroundStyles.DEFAULT_ID
-        } else {
-            null
-        }
-    )
-        private set
+    val backgroundStyleId: String?
+        get() = displaySettings.value.backgroundStyleId
+            ?: if (displaySettings.value.backgroundImagePath == null) BackgroundStyles.DEFAULT_ID else null
+
     var wechatQrImagePath by mutableStateOf(settings.wechatQrImagePath)
         private set
 
-    var backgroundScrimPercent by mutableStateOf(settings.backgroundScrimPercent)
-        private set
+    /** 蒙版透明度；读写都经 [displaySettings]。 */
+    var backgroundScrimPercent: Int
+        get() = displaySettings.value.backgroundScrimPercent
+        private set(value) {
+            displaySettings.applyDisplay(DisplayPatchRequest(backgroundScrimPercent = value))
+        }
 
     val menu: StateFlow<MenuSnapshot> = repository.observeMenu()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MenuSnapshot())
@@ -124,8 +140,8 @@ class AdminViewModel(
     }
 
     fun updateShowStockHint(value: Boolean) {
+        // 赋值即经 DisplaySettingsState 落盘并刷新展示页（见属性定义）。
         showStockHint = value
-        settings.showStockHint = value
     }
 
     fun updateAutoScrollEnabled(value: Boolean) {
@@ -135,12 +151,10 @@ class AdminViewModel(
 
     fun updateCardAlphaPercent(value: Int) {
         cardAlphaPercent = value
-        settings.cardAlphaPercent = value
     }
 
     fun updateBackgroundScrimPercent(value: Int) {
         backgroundScrimPercent = value
-        settings.backgroundScrimPercent = value
     }
 
     /** 刷新主机运行状态、配对信息与在线设备（设置弹窗打开时每 2 秒调用）。 */
@@ -192,10 +206,8 @@ class AdminViewModel(
             jpegQuality = ImageStore.BACKGROUND_JPEG_QUALITY
         ) ?: return false
         val previous = backgroundImagePath
-        backgroundImagePath = path
-        settings.backgroundImagePath = path
-        backgroundStyleId = null
-        settings.backgroundStyleId = null
+        // 一次补丁同时表达「设图 + 清样式」，互斥由 DisplaySettingsState 保证。
+        displaySettings.applyDisplay(DisplayPatchRequest(backgroundImagePath = path))
         if (previous != null && previous != path) imageStore.delete(previous)
         TpLog.i(TAG, "已更新展示页背景图")
         return true
@@ -204,10 +216,7 @@ class AdminViewModel(
     /** 选用内置背景样式：写入样式 id，并清除自定义背景图与其文件（两者互斥）。 */
     fun applyBackgroundStyle(id: String) {
         val previous = backgroundImagePath
-        backgroundStyleId = id
-        settings.backgroundStyleId = id
-        backgroundImagePath = null
-        settings.backgroundImagePath = null
+        displaySettings.applyDisplay(DisplayPatchRequest(backgroundStyleId = id))
         imageStore.delete(previous)
         TpLog.i(TAG, "已选用内置背景样式 $id")
     }
@@ -215,10 +224,9 @@ class AdminViewModel(
     /** 恢复默认背景：清除自定义背景图并回到默认样式（喜庆红），同时删除图片文件。 */
     fun clearBackground() {
         val previous = backgroundImagePath
-        backgroundStyleId = BackgroundStyles.DEFAULT_ID
-        settings.backgroundStyleId = BackgroundStyles.DEFAULT_ID
-        backgroundImagePath = null
-        settings.backgroundImagePath = null
+        displaySettings.applyDisplay(
+            DisplayPatchRequest(backgroundStyleId = BackgroundStyles.DEFAULT_ID)
+        )
         imageStore.delete(previous)
         TpLog.i(TAG, "已恢复默认背景")
     }
@@ -333,11 +341,19 @@ class AdminViewModel(
             settings: SettingsStore,
             imageStore: ImageStore,
             backupManager: BackupManager,
-            hostStatus: HostStatusProvider
+            hostStatus: HostStatusProvider,
+            displaySettings: DisplaySettingsState
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                AdminViewModel(repository, settings, imageStore, backupManager, hostStatus) as T
+                AdminViewModel(
+                    repository,
+                    settings,
+                    imageStore,
+                    backupManager,
+                    hostStatus,
+                    displaySettings
+                ) as T
         }
     }
 }

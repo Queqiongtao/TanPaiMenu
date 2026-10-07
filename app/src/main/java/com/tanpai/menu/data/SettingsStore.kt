@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.Build
 import java.util.UUID
 
-class SettingsStore(context: Context) : PairCodeStore {
+class SettingsStore(context: Context) : PairCodeStore, DisplaySettings {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -17,7 +17,7 @@ class SettingsStore(context: Context) : PairCodeStore {
         get() = storeName.ifBlank { DEFAULT_STORE_NAME }
 
     /** 展示页是否显示「有货 / 已售完 / 余 N」标识。 */
-    var showStockHint: Boolean
+    override var showStockHint: Boolean
         get() = prefs.getBoolean(KEY_SHOW_STOCK, true)
         set(value) = prefs.edit().putBoolean(KEY_SHOW_STOCK, value).apply()
 
@@ -27,7 +27,7 @@ class SettingsStore(context: Context) : PairCodeStore {
         set(value) = prefs.edit().putBoolean(KEY_AUTO_SCROLL, value).apply()
 
     /** 展示页菜品卡片底部不透明度（百分比，范围 [MIN_CARD_ALPHA_PERCENT]..100）。 */
-    var cardAlphaPercent: Int
+    override var cardAlphaPercent: Int
         get() = prefs.getInt(KEY_CARD_ALPHA, DEFAULT_CARD_ALPHA_PERCENT)
             .coerceIn(MIN_CARD_ALPHA_PERCENT, 100)
         set(value) = prefs
@@ -36,7 +36,7 @@ class SettingsStore(context: Context) : PairCodeStore {
             .apply()
 
     /** 展示页背景图相对路径（images/xxx.jpg），null 表示未设置。 */
-    var backgroundImagePath: String?
+    override var backgroundImagePath: String?
         get() = prefs.getString(KEY_BACKGROUND_IMAGE, null)?.takeIf { it.isNotBlank() }
         set(value) = prefs.edit().putString(KEY_BACKGROUND_IMAGE, value).apply()
 
@@ -45,7 +45,7 @@ class SettingsStore(context: Context) : PairCodeStore {
      *
      * 与 [backgroundImagePath] 互斥：同一时刻只有一种背景生效（由 ui/admin 在写入时保证）。
      */
-    var backgroundStyleId: String?
+    override var backgroundStyleId: String?
         get() = prefs.getString(KEY_BACKGROUND_STYLE, null)?.takeIf { it.isNotBlank() }
         set(value) = prefs.edit().putString(KEY_BACKGROUND_STYLE, value).apply()
 
@@ -59,7 +59,7 @@ class SettingsStore(context: Context) : PairCodeStore {
         set(value) = prefs.edit().putString(KEY_WECHAT_QR_IMAGE, value).apply()
 
     /** 展示页背景图上的白色蒙版不透明度（百分比，范围 0..80）。 */
-    var backgroundScrimPercent: Int
+    override var backgroundScrimPercent: Int
         get() = prefs.getInt(KEY_BACKGROUND_SCRIM, DEFAULT_BACKGROUND_SCRIM_PERCENT)
             .coerceIn(MIN_BACKGROUND_SCRIM_PERCENT, MAX_BACKGROUND_SCRIM_PERCENT)
         set(value) = prefs
@@ -207,20 +207,23 @@ class SettingsStore(context: Context) : PairCodeStore {
         const val KEY_SHOW_STOCK = "show_stock"
         const val KEY_AUTO_SCROLL = "auto_scroll"
         const val KEY_CARD_ALPHA = "card_alpha"
-        /** 卡片底不透明度默认值（百分比）。 */
-        const val DEFAULT_CARD_ALPHA_PERCENT = 15
+        /** 区间取值见 [DisplaySpec]，此处只做别名以保持既有引用可用。 */
+        const val DEFAULT_CARD_ALPHA_PERCENT = DisplaySpec.DEFAULT_CARD_ALPHA_PERCENT
+
         /** 卡片底不透明度下限（百分比），避免卡片完全隐形。 */
-        const val MIN_CARD_ALPHA_PERCENT = 15
+        const val MIN_CARD_ALPHA_PERCENT = DisplaySpec.MIN_CARD_ALPHA_PERCENT
         const val KEY_BACKGROUND_IMAGE = "background_image"
         const val KEY_BACKGROUND_STYLE = "background_style"
         const val KEY_WECHAT_QR_IMAGE = "wechat_qr_image"
         const val KEY_BACKGROUND_SCRIM = "background_scrim"
         /** 背景蒙版默认不透明度（百分比）。 */
-        const val DEFAULT_BACKGROUND_SCRIM_PERCENT = 25
+        const val DEFAULT_BACKGROUND_SCRIM_PERCENT = DisplaySpec.DEFAULT_BACKGROUND_SCRIM_PERCENT
+
         /** 背景蒙版不透明度下限（百分比）。 */
-        const val MIN_BACKGROUND_SCRIM_PERCENT = 0
+        const val MIN_BACKGROUND_SCRIM_PERCENT = DisplaySpec.MIN_BACKGROUND_SCRIM_PERCENT
+
         /** 背景蒙版不透明度上限（百分比），过高会完全遮住背景图。 */
-        const val MAX_BACKGROUND_SCRIM_PERCENT = 80
+        const val MAX_BACKGROUND_SCRIM_PERCENT = DisplaySpec.MAX_BACKGROUND_SCRIM_PERCENT
         const val KEY_DEVICE_ID = "device_id"
         const val KEY_PAIR_TOKEN = "pair_token"
         const val KEY_SERVER_PORT = "server_port"

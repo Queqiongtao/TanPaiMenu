@@ -7,6 +7,8 @@ import com.tanpai.menu.net.protocol.DeviceRole
 import com.tanpai.menu.net.protocol.DishCreateRequest
 import com.tanpai.menu.net.protocol.DishDto
 import com.tanpai.menu.net.protocol.DishPatchRequest
+import com.tanpai.menu.net.protocol.DisplayPatchRequest
+import com.tanpai.menu.net.protocol.DisplaySettingsDto
 import com.tanpai.menu.net.protocol.ErrorBody
 import com.tanpai.menu.net.protocol.ImageUploadDto
 import com.tanpai.menu.net.protocol.PairRequest
@@ -158,15 +160,32 @@ class HostRestClient(
         executeEmpty(write(hostAddress, "menu/reset", token).post(EMPTY_BODY).build())
 
     /**
+     * `PATCH /display`：修改展示设置（`docs/design/0023` 第 2.2 节），返回应用后的完整设置。
+     *
+     * 字段为 null 表示不改；`backgroundImagePath` 为空串表示清除自定义背景图。
+     */
+    suspend fun updateDisplay(
+        hostAddress: String,
+        token: String,
+        patch: DisplayPatchRequest
+    ): DisplaySettingsDto = execute(
+        write(hostAddress, "display", token)
+            .patch(jsonBody(DisplayPatchRequest.serializer(), patch))
+            .build()
+    ) { ProtocolJson.decodeFromString(DisplaySettingsDto.serializer(), it) }
+
+    /**
      * `POST /images`：multipart 上传压缩后的图片字节，返回主机上的相对路径。
      *
-     * 主机按文件魔数判定类型，[contentType] 只作为分区声明。
+     * 主机按文件魔数判定类型，[contentType] 只作为分区声明；
+     * [kind] 为 `background` 时主机按背景图规格落盘（长边 2048、JPEG 85，见 `docs/design/0023`）。
      */
     suspend fun uploadImage(
         hostAddress: String,
         token: String,
         bytes: ByteArray,
-        contentType: String = JPEG_CONTENT_TYPE
+        contentType: String = JPEG_CONTENT_TYPE,
+        kind: String? = null
     ): ImageUploadDto {
         val part = MultipartBody.Part.createFormData(
             IMAGE_FIELD,
@@ -179,14 +198,25 @@ class HostRestClient(
             .setType(MultipartBody.FORM)
             .addPart(part)
             .build()
+        val url = buildString {
+            append(endpoint(hostAddress, "images"))
+            if (kind != null) append("?kind=").append(kind)
+        }
         val request = Request.Builder()
-            .url(endpoint(hostAddress, "images"))
+            .url(url)
             .withClientIdentity()
             .header(AUTHORIZATION, "Bearer $token")
             .post(body)
             .build()
         return execute(request) { ProtocolJson.decodeFromString(ImageUploadDto.serializer(), it) }
     }
+
+    /** `POST /images?kind=background`：上传自定义背景图（规格由主机按 `kind` 决定）。 */
+    suspend fun uploadBackgroundImage(
+        hostAddress: String,
+        token: String,
+        bytes: ByteArray
+    ): ImageUploadDto = uploadImage(hostAddress, token, bytes, kind = IMAGE_KIND_BACKGROUND)
 
     /** 主机地址原文 → `http://host:port/api/v1/<path>`；非法地址抛可展示的中文错误。 */
     private fun endpoint(hostAddress: String, path: String): String {
@@ -237,12 +267,16 @@ class HostRestClient(
         return HostApiException(status, info?.code, info?.message ?: "平板返回 $status")
     }
 
-    private companion object {
+    /** 对外可引用上传规格常量（客户端命令层需要 `?kind=background`）。 */
+    companion object {
         const val AUTHORIZATION = "Authorization"
         const val DEVICE_ID_HEADER = "X-Device-Id"
         const val DEVICE_ROLE_HEADER = "X-Device-Role"
         const val IMAGE_FIELD = "file"
         const val JPEG_CONTENT_TYPE = "image/jpeg"
+
+        /** `POST /images?kind=background`：按背景图规格落盘（`docs/design/0023`）。 */
+        const val IMAGE_KIND_BACKGROUND = "background"
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         val EMPTY_BODY = ByteArray(0).toRequestBody(null)
     }

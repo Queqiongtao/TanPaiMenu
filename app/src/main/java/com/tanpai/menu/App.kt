@@ -8,6 +8,7 @@ import com.tanpai.menu.backup.BackupManager
 import com.tanpai.menu.client.ClientSession
 import com.tanpai.menu.client.PairingClient
 import com.tanpai.menu.data.MenuRepository
+import com.tanpai.menu.data.DisplaySettingsState
 import com.tanpai.menu.data.PinManager
 import com.tanpai.menu.data.Role
 import com.tanpai.menu.data.SettingsStore
@@ -41,13 +42,20 @@ class AppContainer(context: Context) {
     /** 一次性 6 位配对码（`docs/design/0019` 第 2.1 节）。 */
     val pairCodeManager: PairCodeManager = PairCodeManager(settingsStore)
 
+    /**
+     * 展示设置的可观察状态（`docs/design/0023`）：主机后端与展示页 / 管理页共用同一实例，
+     * 手机端改设置后平板展示页立即重绘。
+     */
+    val displaySettingsState: DisplaySettingsState = DisplaySettingsState(settingsStore)
+
     /** 主机业务窄接口实现：HTTP 管线与 WS 广播共用。 */
     val menuBackend: RepositoryMenuBackend = RepositoryMenuBackend(
         repository = menuRepository,
         imageStore = imageStore,
         deviceDao = database.deviceDao(),
         storeName = { settingsStore.displayStoreName },
-        clientEditsEnabled = { settingsStore.clientEditsEnabled }
+        clientEditsEnabled = { settingsStore.clientEditsEnabled },
+        displaySettings = displaySettingsState
     )
 
     val hostApi: HostApi = HostApi(

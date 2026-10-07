@@ -7,6 +7,8 @@ import com.tanpai.menu.net.protocol.DeviceDto
 import com.tanpai.menu.net.protocol.DishCreateRequest
 import com.tanpai.menu.net.protocol.DishDto
 import com.tanpai.menu.net.protocol.DishPatchRequest
+import com.tanpai.menu.net.protocol.DisplayPatchRequest
+import com.tanpai.menu.net.protocol.DisplaySettingsDto
 import com.tanpai.menu.net.protocol.ErrorCode
 import com.tanpai.menu.net.protocol.ImageUploadDto
 import com.tanpai.menu.net.protocol.PairResponse
@@ -14,6 +16,7 @@ import com.tanpai.menu.net.protocol.ProtocolJson
 import com.tanpai.menu.net.protocol.StateDto
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -82,6 +85,54 @@ class HostApiTest {
 
         assertEquals(204, response.status)
         assertEquals(0, response.body.size)
+    }
+
+    @Test
+    fun displayPatchAppliesFieldsAndKeepsStyleImageExclusive() = runTest {
+        val backend = FakeBackend()
+        val pipeline = api(backend)
+
+        val style = pipeline.handle(
+            request("PATCH", "/display", """{"cardAlphaPercent":60,"showStockHint":false}""")
+        )
+        assertEquals(200, style.status)
+        val afterStyle = ProtocolJson.decodeFromString(
+            DisplaySettingsDto.serializer(),
+            style.bodyText
+        )
+        assertEquals(60, afterStyle.cardAlphaPercent)
+        assertEquals(false, afterStyle.showStockHint)
+
+        // 选内置样式 → 清掉自定义图；再设自定义图 → 清掉样式 id（互斥，docs/design/0023 第 2.2 节）。
+        pipeline.handle(request("PATCH", "/display", """{"backgroundStyleId":"bamboo"}"""))
+        val withImage = pipeline.handle(
+            request("PATCH", "/display", """{"backgroundImagePath":"images/a.jpg"}""")
+        )
+        val afterImage = ProtocolJson.decodeFromString(
+            DisplaySettingsDto.serializer(),
+            withImage.bodyText
+        )
+        assertEquals("images/a.jpg", afterImage.backgroundImagePath)
+        assertNull(afterImage.backgroundStyleId)
+
+        // 空串 = 清除自定义图。
+        val cleared = pipeline.handle(request("PATCH", "/display", """{"backgroundImagePath":""}"""))
+        val afterClear = ProtocolJson.decodeFromString(
+            DisplaySettingsDto.serializer(),
+            cleared.bodyText
+        )
+        assertNull(afterClear.backgroundImagePath)
+    }
+
+    @Test
+    fun displayPatchRejectsOutOfRangeTransparency() = runTest {
+        val pipeline = api(FakeBackend())
+
+        val tooDark = pipeline.handle(request("PATCH", "/display", """{"cardAlphaPercent":5}"""))
+        val tooOpaque = pipeline.handle(request("PATCH", "/display", """{"backgroundScrimPercent":95}"""))
+
+        assertEquals(400, tooDark.status)
+        assertEquals(400, tooOpaque.status)
     }
 
     @Test
@@ -312,7 +363,8 @@ class HostApiTest {
             categories = categories.filter { it.enabled },
             dishes = dishes.filter { it.enabled },
             storeName = storeName,
-            clientEditsEnabled = clientEdits
+            clientEditsEnabled = clientEdits,
+            display = display()
         )
 
         override suspend fun categories(): List<CategoryDto> = categories.filter { it.enabled }
@@ -404,6 +456,35 @@ class HostApiTest {
 
         override suspend fun saveImage(bytes: ByteArray): String? =
             "images/11111111-1111-1111-1111-111111111111.jpg"
+
+        override suspend fun saveBackgroundImage(bytes: ByteArray): String? =
+            "images/22222222-2222-2222-2222-222222222222.jpg"
+
+        /** 展示设置替身（`docs/design/0023`）：内存态，便于验证三态与互斥。 */
+        val display = InMemoryDisplaySettings()
+
+        override suspend fun display(): DisplaySettingsDto = DisplaySettingsDto(
+            backgroundStyleId = display.backgroundStyleId,
+            backgroundImagePath = display.backgroundImagePath,
+            backgroundScrimPercent = display.backgroundScrimPercent,
+            cardAlphaPercent = display.cardAlphaPercent,
+            showStockHint = display.showStockHint
+        )
+
+        override suspend fun applyDisplay(patch: DisplayPatchRequest): DisplaySettingsDto {
+            patch.backgroundStyleId?.let { style ->
+                display.backgroundStyleId = style.takeIf { it.isNotBlank() }
+                display.backgroundImagePath = null
+            }
+            patch.backgroundImagePath?.let { path ->
+                display.backgroundImagePath = path.takeIf { it.isNotBlank() }
+                display.backgroundStyleId = null
+            }
+            patch.backgroundScrimPercent?.let { display.backgroundScrimPercent = it }
+            patch.cardAlphaPercent?.let { display.cardAlphaPercent = it }
+            patch.showStockHint?.let { display.showStockHint = it }
+            return display()
+        }
 
         override suspend fun readImage(name: String): ImagePayload? =
             if (name == "11111111-2222-3333-4444-555555555555.jpg") {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -109,7 +110,9 @@ fun ClientMenuScreen(
     var actionsCategory by remember { mutableStateOf<CategoryDto?>(null) }
     var showNewDish by remember { mutableStateOf(false) }
     var editingDish by remember { mutableStateOf<Dish?>(null) }
-    var deletingDish by remember { mutableStateOf<Dish?>(null) }
+
+    /** 待确认删除的菜品：直接持有契约 DTO（行内删除按钮传入的也是 DTO）。 */
+    var deletingDish by remember { mutableStateOf<DishDto?>(null) }
     var showMore by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
 
@@ -176,7 +179,8 @@ fun ClientMenuScreen(
                     adminMode = editingEnabled,
                     onSelect = { selectedCategoryId = it },
                     onAddCategory = { showNewCategory = true },
-                    onLongPress = { actionsCategory = it }
+                    onLongPress = { actionsCategory = it },
+                    onRequestDelete = { deletingCategory = it }
                 )
                 val dishes = state.dishes.filter { it.categoryId == selectedCategoryId }
                 if (dishes.isEmpty()) {
@@ -195,7 +199,8 @@ fun ClientMenuScreen(
                                 onUnsell = { submit(ClientCommand.Unsell(dish.id)) },
                                 onSoldOutChange = { soldOut ->
                                     submit(ClientCommand.SetSoldOut(dish.id, soldOut))
-                                }
+                                },
+                                onRequestDelete = { deletingDish = dish }
                             )
                         }
                     }
@@ -427,7 +432,8 @@ private fun CategoryRow(
     adminMode: Boolean,
     onSelect: (Long) -> Unit,
     onAddCategory: () -> Unit,
-    onLongPress: (CategoryDto) -> Unit
+    onLongPress: (CategoryDto) -> Unit,
+    onRequestDelete: (CategoryDto) -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -437,15 +443,26 @@ private fun CategoryRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         categories.forEach { category ->
-            FilterChip(
-                selected = category.id == selectedId,
-                onClick = { onSelect(category.id) },
-                label = { Text(category.name) },
-                modifier = Modifier.combinedClickable(
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FilterChip(
+                    selected = category.id == selectedId,
                     onClick = { onSelect(category.id) },
-                    onLongClick = if (adminMode) ({ onLongPress(category) }) else null
+                    label = { Text(category.name) },
+                    modifier = Modifier.combinedClickable(
+                        onClick = { onSelect(category.id) },
+                        onLongClick = if (adminMode) ({ onLongPress(category) }) else null
+                    )
                 )
-            )
+                // 管理模式下给每个分类一个显式删除入口：长按在 MIUI 等系统上不可靠（`docs/design/0023` 第 2.1 节）。
+                if (adminMode) {
+                    TextButton(
+                        onClick = { onRequestDelete(category) },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text("×", style = MaterialTheme.typography.titleLarge)
+                    }
+                }
+            }
         }
         if (adminMode) {
             AssistChip(
@@ -467,7 +484,8 @@ private fun ClientDishRow(
     onEdit: () -> Unit,
     onSell: () -> Unit,
     onUnsell: () -> Unit,
-    onSoldOutChange: (Boolean) -> Unit
+    onSoldOutChange: (Boolean) -> Unit,
+    onRequestDelete: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -523,6 +541,10 @@ private fun ClientDishRow(
                                 if (dish.soldOut) R.string.admin_restore else R.string.admin_sold_out_action
                             )
                         )
+                    }
+                    // 行内显式删除：不再要求先进编辑弹窗（`docs/design/0023` 第 2.1 节）。
+                    TextButton(onClick = onRequestDelete, enabled = canEdit) {
+                        Text(stringResource(R.string.admin_delete))
                     }
                 }
             }

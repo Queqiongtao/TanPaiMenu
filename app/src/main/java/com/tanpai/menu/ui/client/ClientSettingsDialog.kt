@@ -18,6 +18,7 @@ import com.tanpai.menu.client.ClientMenuState
 @Composable
 fun ClientSettingsDialog(
     state: ClientMenuState,
+    onOpenDisplay: () -> Unit,
     onReconnect: () -> Unit,
     onRepair: () -> Unit,
     onSwitchToHost: () -> Unit,
@@ -81,6 +82,9 @@ fun ClientSettingsDialog(
         },
         dismissButton = {
             Column {
+                TextButton(onClick = onOpenDisplay) {
+                    Text(stringResource(R.string.client_display_title))
+                }
                 TextButton(onClick = onReconnect) { Text(stringResource(R.string.client_reconnect)) }
                 TextButton(onClick = onRepair) { Text(stringResource(R.string.client_repair)) }
                 TextButton(onClick = onSwitchToHost) {

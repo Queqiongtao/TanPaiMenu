@@ -24,7 +24,8 @@ app/src/main/java/com/tanpai/menu/
 ├─ ui/display/  # 顾客展示页（2 列 × 6 行横卡；自定义背景图 / 内置样式与白色蒙版；推荐 / 新品标签、沽清盖章动画与空闲自动滚动；店名左侧微信二维码（店主上传或内置默认）与点击放大浮层；内置字体见 ui/theme）
 ├─ ui/admin/    # 管理与设置页（双端共用）
 ├─ ui/theme/    # 字体（Noto Sans SC Bold + 店名专用霞鹜文楷子集）、字型、展示页状态/标签语义色、店名招牌配色与内置背景样式
-├─ ui/client/   # 手机客户端界面：配对页 / 菜单页（只读 + 管理模式编辑）/ 设置弹窗（M10 / M11）
+├─ ui/client/   # 手机客户端界面：配对页（扫码为主 + 手动配对折叠）/ 菜单页（只读 + 管理模式编辑）/ 设置弹窗（M10 / M11 / M12）
+├─ qrcode/      # 手机端扫码配对：Camera2 预览与取景框、zxing core 解码（M12）
 ├─ ui/dialogs/  # 分类 / 菜品编辑与确认对话框（管理页与手机端共用）
 ├─ imaging/     # 压缩、存储、加载
 ├─ backup/      # 备份格式（format 2，兼容读取 format 1）与导出 / 导入
@@ -34,7 +35,7 @@ app/src/main/java/com/tanpai/menu/
 
 模块边界：`host` 与 `client` 不互相引用；跨模块只经 `net` / `data` 的接口与 DTO 交互。
 
-Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 已落地 `net/protocol` 与 `host`（M6 契约与单写者、M7 REST / WS 与配对信息、M8 前台服务保活 / 启停开关 / 在线设备列表、M9 契约测试与文档回填）；Phase 3 的 M10 已落地 `net`（地址解析 / REST / WS 客户端）、`client`（配对 / 会话 / 镜像 / 退避）与 `ui/client`（配对页 / 只读菜单页），角色分流入 `data/Role.kt` 与 `MainActivity`；M11 追加客户端写路径（`client/ClientCommand`、`ClientCommandExecutor`、`ClientSession.submit/uploadImage`）、`ui/client` 管理模式、`ui/dialogs` 共用对话框与 `imaging/ImageCompressor`，并在 `host` 侧增加「允许手机编辑」判定与 `POST /menu/reset`；Phase 4 追加 `Dish.highlight`、Room 2→3、备份 format 2、展示页标签 / 盖章动画 / 空闲自动滚动。
+Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 已落地 `net/protocol` 与 `host`（M6 契约与单写者、M7 REST / WS 与配对信息、M8 前台服务保活 / 启停开关 / 在线设备列表、M9 契约测试与文档回填）；Phase 3 的 M10 已落地 `net`（地址解析 / REST / WS 客户端）、`client`（配对 / 会话 / 镜像 / 退避）与 `ui/client`（配对页 / 只读菜单页），角色分流入 `data/Role.kt` 与 `MainActivity`；M11 追加客户端写路径（`client/ClientCommand`、`ClientCommandExecutor`、`ClientSession.submit/uploadImage`）、`ui/client` 管理模式、`ui/dialogs` 共用对话框与 `imaging/ImageCompressor`，并在 `host` 侧增加「允许手机编辑」判定与 `POST /menu/reset`；Phase 4 追加 `Dish.highlight`、Room 2→3、备份 format 2、展示页标签 / 盖章动画 / 空闲自动滚动；Phase 5 的 M12 追加手机端 `qrcode`（Camera2 预览 + zxing core 解码）与 `ui/client` 扫码配对页，主机侧与协议不变。
 
 ## 3. 关键流程与数据流
 
@@ -45,7 +46,7 @@ Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`�
 - 展示微信二维码：`SettingsStore.wechatQrImagePath`（key `wechat_qr_image`）指向 `images/<uuid>.png`；店主在管理页设置弹窗经 `ImageStore.importLosslessFromUri`（PNG 无损、长边 1024）导入，可相册或拍照；放大浮层在 `ui/display/WechatQrOverlay.kt`（`WECHAT_QR_AUTO_COLLAPSE_MILLIS = 5000`）；`DisplayScreen` 计算图片模型 `Any`——已上传且文件存在的 `File` 优先，否则回退内置资源 `R.drawable.wechat_qr_default`（`res/drawable-nodpi`，入口恒显示）；与背景图同为「非菜品图」但内置图是资源，故只需保留店主上传的那张，须加入启动孤儿图清理与「恢复默认菜单」保留集合；不参与备份（`backup.json` 仍不包含微信二维码）。见 `docs/design/0010-展示页微信二维码.md`。
 - 同步：客户端 `/state` 全量对齐 + WS 事件增量；用 `version` 判新旧；断线重连重取快照。
 - 手机端编辑（M11）：`ui/client` 管理模式 → `client/ClientCommand`（命令 → 契约请求，带唯一 `requestId`）→ `ClientCommandExecutor` / `net/HostRestClient` → `host/HostApi` → `MenuRepository` 单写者事务 → WS 广播 → 两端镜像重新对齐。提交期间禁用入口、**不做乐观更新与回滚**；主机按 `X-Device-Role: client` + `SettingsStore.clientEditsEnabled` 决定是否放行写请求（关闭时 403 `forbidden`，且拒绝前先丢弃请求体以保护 keep-alive 连接）；「恢复默认菜单」走 `POST /menu/reset` → `FullReload` → 广播 `snapshot`；图片压缩后经 `POST /images` 上传。见 `docs/design/0020-手机客户端编辑.md`。
-- 配对：主机生成 token → 二维码 / NSD / 手输 → 客户端带 token 请求。
+- 配对：主机生成 token → 二维码扫码（手机端默认，见 `docs/design/0022`）或手输「地址 + 一次性 6 位配对码」→ 客户端带 token 请求。
 - 展示打磨（Phase 4）：`Dish.highlight` 经 Room / REST 同步；`DisplayScreen` 用缩略图徽标和一次性盖章动画表达状态；`DishGrid` 在菜品超过首屏且 15 秒无操作后每 6 秒自动滚动一行，触摸立即重置，设置项 `SettingsStore.autoScrollEnabled` 可关闭。见 `docs/design/0021-展示页动画与打磨.md`。
 
 Phase 2 主机写管线（M6 起实现）：客户端 / 本机命令 → `host` 路由与鉴权 → `net/protocol` 解析 → `MenuRepository` 单写者锁 → 事务提交 → `MenuChange` 事件 → WS 广播。
@@ -133,3 +134,6 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-07 | M11 落地：手机端编辑（管理模式、分类 / 菜品增删改、卖出 / 撤销 / 沽清、恢复默认菜单、压缩上传图片）、主机「允许手机编辑」判定（`X-Device-Role` + 403 `forbidden`）、`POST /menu/reset` 与 `/state` 店名下发；撤销改为全局最后一条 | 0020、0001、0002、0015、0019 |
 | 2026-10-07 | Phase 4 落地：推荐 / 新品标签、沽清盖章动画、空闲自动滚动；Room 2→3、契约标签字段、备份 format 2；启动淡入按性能门禁回退静态 | 0021、0001、0004 |
 | 2026-10-07 | Android 9+ 手机上启用局域网明文 HTTP，修复 targetSdk 28+ 客户端配对被系统拦截 | 0019 |
+| 2026-10-07 | Phase 5 设计定稿：手机端扫码配对（默认开相机，手动配对折叠保留），相机用 Camera2 + zxing core（零新增依赖），二维码内容与主机协议不变 | 0022 |
+| 2026-10-07 | M12 落地：`net/PairQr` 解析二维码、`PairingClient.pairByQr` 落盘凭据、新包 `qrcode/`（Camera2 预览 + 取帧 + zxing 解码）、`ui/client` 扫码配对页；APK 0.2.0；单测 162 项、构建通过 | 0022、0019、0002 |
+| 2026-10-07 | M13 落地：手机端分类 / 菜品行内删除 + 二次确认；展示设置下发与可改（`PATCH /display` + `display.updated` + `/images?kind=background`）；`DisplaySettingsState` 让展示页对设置变更即时重绘；补 `tanpai://pair` 配对深链接；单测 169 项通过 | 0023、0001、0020 |

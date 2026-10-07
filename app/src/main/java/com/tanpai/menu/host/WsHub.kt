@@ -2,6 +2,7 @@ package com.tanpai.menu.host
 
 import com.tanpai.menu.data.MenuChange
 import com.tanpai.menu.net.protocol.DeviceDto
+import com.tanpai.menu.net.protocol.DisplaySettingsDto
 import com.tanpai.menu.net.protocol.EventType
 import com.tanpai.menu.net.protocol.ProtocolJson
 import com.tanpai.menu.net.protocol.StateDto
@@ -109,11 +110,18 @@ class WsHub {
             idEvent(EventType.CATEGORY_DELETED, change.version, change.categoryId)
 
         is MenuChange.FullReload -> null
+
+        // 展示设置事件由 HostServer 用 displayEvent 构造（载荷是完整设置，不在 MenuChange 里）。
+        is MenuChange.DisplayUpdated -> null
     }
 
     /** 设备上下线事件帧。 */
     fun deviceEvent(type: String, version: Long, device: DeviceDto): WireEvent =
         event(type, version, device)
+
+    /** 展示设置变更帧（`docs/design/0023` 第 2.2 节）。 */
+    fun displayEvent(settings: DisplaySettingsDto, version: Long): WireEvent =
+        event(EventType.DISPLAY_UPDATED, version, settings)
 
     fun encode(event: WireEvent): String = ProtocolJson.encodeToString(event)
 

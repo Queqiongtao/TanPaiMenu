@@ -1,5 +1,6 @@
 package com.tanpai.menu
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,11 +18,15 @@ import com.tanpai.menu.data.Role
 import com.tanpai.menu.ui.RoleSelectScreen
 import com.tanpai.menu.ui.TanPaiMenuApp
 import com.tanpai.menu.ui.client.ClientApp
+import com.tanpai.menu.ui.client.PairDeepLink
 
 class MainActivity : ComponentActivity() {
 
     /** 当前角色；仅用于重新获得焦点时恢复系统栏形态。 */
     private var role: Role? = null
+
+    /** 深链接带来的配对内容（`tanpai://pair?...` 或二维码里的 http 地址）。 */
+    private var pendingPairLink by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +34,8 @@ class MainActivity : ComponentActivity() {
         val container = app.container
         role = container.settingsStore.role
         applySystemBars(role)
+
+        pendingPairLink = PairDeepLink.contentFrom(intent)
 
         setContent {
             var currentRole by mutableStateOf(role)
@@ -51,7 +58,8 @@ class MainActivity : ComponentActivity() {
                             imageStore = container.imageStore,
                             backupManager = container.backupManager,
                             hostStatus = container.hostStatus,
-                            onSwitchToClient = { switchRole(Role.CLIENT) }
+                            onSwitchToClient = { switchRole(Role.CLIENT) },
+                            displaySettings = container.displaySettingsState
                         )
 
                         Role.CLIENT -> ClientApp(
@@ -59,12 +67,21 @@ class MainActivity : ComponentActivity() {
                             pairingClient = container.pairingClient,
                             settings = container.settingsStore,
                             onCreateCaptureUri = { container.imageStore.newCaptureUri() },
-                            onSwitchToHost = { switchRole(Role.HOST) }
+                            onSwitchToHost = { switchRole(Role.HOST) },
+                            pairLink = pendingPairLink
                         )
                     }
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // 已在运行时再次收到配对深链接：更新内容触发一次配对（见 ClientConnectScreen）。
+        val content = PairDeepLink.contentFrom(intent) ?: return
+        pendingPairLink = content
     }
 
     override fun onResume() {

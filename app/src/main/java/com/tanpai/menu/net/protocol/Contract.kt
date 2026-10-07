@@ -25,6 +25,9 @@ object EventType {
     const val CATEGORY_DELETED = "category.deleted"
     const val DEVICE_JOINED = "device.joined"
     const val DEVICE_LEFT = "device.left"
+
+    /** 展示设置变更（`docs/design/0023` 第 2.2 节）：payload 为 [DisplaySettingsDto]。 */
+    const val DISPLAY_UPDATED = "display.updated"
 }
 
 /** 统一错误码，见 docs/design/0001 第 3.1 节。 */
@@ -80,7 +83,42 @@ data class StateDto(
     /** 店名；空串或 null 表示未设置，客户端回退到默认文案。 */
     val storeName: String? = null,
     /** 主机是否允许手机编辑（`docs/design/0020` 第 2.3 节）；老客户端忽略该字段。 */
-    val clientEditsEnabled: Boolean = true
+    val clientEditsEnabled: Boolean = true,
+    /** 展示设置（`docs/design/0023` 第 2.2 节）；老客户端忽略该字段。 */
+    val display: DisplaySettingsDto? = null
+)
+
+/**
+ * 展示设置（`docs/design/0023` 第 2.2 节）：平板展示页的外观相关设置。
+ *
+ * [backgroundStyleId] 与 [backgroundImagePath] 互斥：自定义背景图生效时样式 id 为空。
+ */
+@Serializable
+data class DisplaySettingsDto(
+    /** 内置背景样式 id；为空表示未选内置样式（用自定义图或默认样式）。 */
+    val backgroundStyleId: String? = null,
+    /** 自定义背景图相对路径 `images/<uuid>.jpg`；为空表示未设置。 */
+    val backgroundImagePath: String? = null,
+    /** 白色蒙版不透明度百分比（0–100）。 */
+    val backgroundScrimPercent: Int = 25,
+    /** 菜品卡片底色不透明度百分比（0–100）。 */
+    val cardAlphaPercent: Int = 15,
+    /** 是否显示「有货」提示。 */
+    val showStockHint: Boolean = true
+)
+
+/**
+ * `PATCH /display` 请求（`docs/design/0023` 第 2.2 节）：字段为 null 表示不改。
+ *
+ * [backgroundImagePath] 为三态：null 不改、空串清除自定义图、非空设为该图。
+ */
+@Serializable
+data class DisplayPatchRequest(
+    val backgroundStyleId: String? = null,
+    val backgroundImagePath: String? = null,
+    val backgroundScrimPercent: Int? = null,
+    val cardAlphaPercent: Int? = null,
+    val showStockHint: Boolean? = null
 )
 
 /** GET /devices 列表项。 */

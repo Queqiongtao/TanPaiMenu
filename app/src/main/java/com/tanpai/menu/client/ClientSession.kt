@@ -8,6 +8,8 @@ import com.tanpai.menu.net.MenuSocketClient
 import com.tanpai.menu.net.SocketMessage
 import com.tanpai.menu.net.protocol.CategoryDto
 import com.tanpai.menu.net.protocol.DishDto
+import com.tanpai.menu.net.protocol.DisplayPatchRequest
+import com.tanpai.menu.net.protocol.DisplaySettingsDto
 import com.tanpai.menu.net.protocol.StateDto
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -51,7 +53,9 @@ data class ClientMenuState(
     val categories: List<CategoryDto> = emptyList(),
     val dishes: List<DishDto> = emptyList(),
     val storeName: String? = null,
-    val clientEditsEnabled: Boolean = true
+    val clientEditsEnabled: Boolean = true,
+    /** 展示设置（`docs/design/0023`）；未连上时为默认值。 */
+    val display: DisplaySettingsDto = DisplaySettingsDto()
 ) {
     /** 是否处于「只读」：未连上时界面禁用一切写入入口。 */
     val readOnly: Boolean get() = connection != ClientConnectionState.ONLINE
@@ -156,7 +160,13 @@ class ClientSession(
      *
      * 图片上传不改变菜单版本，因此不与广播对齐，直接返回主机结果。
      */
-    suspend fun uploadImage(bytes: ByteArray): Result<String> {
+    suspend fun uploadImage(bytes: ByteArray): Result<String> = uploadImage(bytes, kind = null)
+
+    /** 上传自定义背景图（`?kind=background`，由主机按背景图规格压缩落盘）。 */
+    suspend fun uploadBackgroundImage(bytes: ByteArray): Result<String> =
+        uploadImage(bytes, kind = HostRestClient.IMAGE_KIND_BACKGROUND)
+
+    private suspend fun uploadImage(bytes: ByteArray, kind: String?): Result<String> {
         val address = settings.clientHostAddress
         val token = settings.clientToken
         if (_state.value.connection != ClientConnectionState.ONLINE ||
@@ -165,7 +175,37 @@ class ClientSession(
         ) {
             return Result.failure(ClientSubmitException(OFFLINE_MESSAGE))
         }
-        return runCatching { rest.uploadImage(address, token, bytes).imagePath }
+        return runCatching { rest.uploadImage(address, token, bytes, kind = kind).imagePath }
+    }
+
+    /**
+     * 提交展示设置补丁（`docs/design/0023` 第 2.4 节）。
+     *
+     * 语义与菜单写命令一致：离线直接失败；成功后等 `display.updated` 到达（内容变化即算对齐），
+     * 超时主动拉一次 `/state` 兜底；失败原样返回主机中文错误，不做乐观更新与回滚。
+     */
+    suspend fun updateDisplay(patch: DisplayPatchRequest): Result<Unit> {
+        val address = settings.clientHostAddress
+        val token = settings.clientToken
+        if (_state.value.connection != ClientConnectionState.ONLINE ||
+            address.isNullOrBlank() ||
+            token.isNullOrBlank()
+        ) {
+            return Result.failure(ClientSubmitException(OFFLINE_MESSAGE))
+        }
+        val before = _state.value.display
+        val failure = runCatching { rest.updateDisplay(address, token, patch) }.exceptionOrNull()
+        if (failure != null) {
+            if (failure is HostApiException && failure.status == HTTP_FORBIDDEN) {
+                runCatching { refreshState() }
+            }
+            return Result.failure(failure)
+        }
+        val applied = withTimeoutOrNull(SYNC_TIMEOUT_MILLIS) {
+            state.first { it.display != before }
+        }
+        if (applied == null) runCatching { refreshState() }
+        return Result.success(Unit)
     }
 
     /** 主动拉一次 `/state` 覆盖镜像（写入超时兜底与权限变化后刷新）。 */
@@ -283,7 +323,8 @@ class ClientSession(
                 categories = mirror.categories(),
                 dishes = mirror.dishes(),
                 storeName = mirror.storeName,
-                clientEditsEnabled = mirror.clientEditsEnabled
+                clientEditsEnabled = mirror.clientEditsEnabled,
+                display = mirror.display
             )
         }
     }

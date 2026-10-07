@@ -2,6 +2,7 @@ package com.tanpai.menu.client
 
 import com.tanpai.menu.net.protocol.CategoryDto
 import com.tanpai.menu.net.protocol.DishDto
+import com.tanpai.menu.net.protocol.DisplaySettingsDto
 import com.tanpai.menu.net.protocol.EventType
 import com.tanpai.menu.net.protocol.ProtocolJson
 import com.tanpai.menu.net.protocol.StateDto
@@ -58,6 +59,31 @@ class ClientMirrorTest {
         assertEquals(9L, mirror.version)
         assertEquals(listOf(3L), mirror.categories().map { it.id })
         assertEquals(listOf(12L), mirror.dishes().map { it.id })
+    }
+
+    @Test
+    fun displaySettingsComeFromSnapshotAndEvent() {
+        val settings = DisplaySettingsDto(
+            backgroundStyleId = "bamboo",
+            backgroundScrimPercent = 40,
+            cardAlphaPercent = 70,
+            showStockHint = false
+        )
+        mirror.applySnapshot(StateDto(5, emptyList(), emptyList(), display = settings))
+        assertEquals(settings, mirror.display)
+
+        // display.updated 与菜单版本无关：即便版本不前进也必须应用（docs/design/0023 第 2.2 节）。
+        val updated = DisplaySettingsDto(backgroundImagePath = "images/a.jpg")
+        val applied = mirror.applyEvent(
+            event(
+                EventType.DISPLAY_UPDATED,
+                5,
+                ProtocolJson.encodeToJsonElement(DisplaySettingsDto.serializer(), updated).jsonObject
+            )
+        )
+
+        assertEquals(EventApplyResult.APPLIED, applied)
+        assertEquals("images/a.jpg", mirror.display.backgroundImagePath)
     }
 
     @Test

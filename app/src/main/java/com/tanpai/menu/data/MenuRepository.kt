@@ -66,6 +66,16 @@ class MenuRepository(
 
     suspend fun allImagePaths(): Set<String> = dishDao.allImagePaths().toSet()
 
+    /**
+     * 广播一次展示设置变更（`docs/design/0023` 第 2.2 节）。
+     *
+     * 展示设置存在 `SettingsStore` 而非 Room，因此没有写事务；调用方在落盘后调用本方法，
+     * 由主机广播器把它变成 `display.updated` 帧。`version` 沿用当前全局版本，不做 +1。
+     */
+    suspend fun notifyDisplayChanged() {
+        mutableEvents.emit(MenuChange.DisplayUpdated(currentVersion()))
+    }
+
     suspend fun exportAll(): FullMenu = FullMenu(categoryDao.getAll(), dishDao.getAll())
 
     suspend fun replaceAll(categories: List<Category>, dishes: List<Dish>): Unit = mutate {

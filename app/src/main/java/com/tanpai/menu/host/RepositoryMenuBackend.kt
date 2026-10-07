@@ -1,6 +1,7 @@
 package com.tanpai.menu.host
 
 import android.webkit.MimeTypeMap
+import com.tanpai.menu.data.DisplaySettingsState
 import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.db.ConnectedDevice
 import com.tanpai.menu.data.db.DeviceDao
@@ -15,6 +16,8 @@ import com.tanpai.menu.net.protocol.DeviceDto
 import com.tanpai.menu.net.protocol.DishCreateRequest
 import com.tanpai.menu.net.protocol.DishDto
 import com.tanpai.menu.net.protocol.DishPatchRequest
+import com.tanpai.menu.net.protocol.DisplayPatchRequest
+import com.tanpai.menu.net.protocol.DisplaySettingsDto
 import com.tanpai.menu.net.protocol.Iso8601
 import com.tanpai.menu.net.protocol.StateDto
 import com.tanpai.menu.net.protocol.toDto
@@ -30,6 +33,8 @@ class RepositoryMenuBackend(
     private val deviceDao: DeviceDao,
     private val storeName: () -> String,
     private val clientEditsEnabled: () -> Boolean,
+    /** 展示设置状态（`docs/design/0023`）：与展示页共用同一实例，改完立即重绘。 */
+    private val displaySettings: DisplaySettingsState = DisplaySettingsState(),
     private val now: () -> Long = System::currentTimeMillis
 ) : MenuBackend {
 
@@ -38,8 +43,20 @@ class RepositoryMenuBackend(
         categories = repository.enabledCategories().map { it.toDto() },
         dishes = repository.enabledDishes().map { it.toDto() },
         storeName = storeName(),
-        clientEditsEnabled = clientEditsEnabled()
+        clientEditsEnabled = clientEditsEnabled(),
+        display = display()
     )
+
+    override suspend fun display(): DisplaySettingsDto = displaySettings.value
+
+    override suspend fun applyDisplay(patch: DisplayPatchRequest): DisplaySettingsDto {
+        // `DisplaySettingsState` 同时负责落盘与通知界面（互斥与清除语义都在它内部）。
+        displaySettings.applyDisplay(patch)
+        val applied = display()
+        // 让主机广播器发出 display.updated；客户端按内容比对，不依赖 version 前进。
+        repository.notifyDisplayChanged()
+        return applied
+    }
 
     override suspend fun categories(): List<CategoryDto> =
         repository.enabledCategories().map { it.toDto() }
@@ -148,6 +165,9 @@ class RepositoryMenuBackend(
     override suspend fun devices(): List<DeviceDto> = deviceDao.getAll().map { it.toDto() }
 
     override suspend fun saveImage(bytes: ByteArray): String? = imageStore.importFromBytes(bytes)
+
+    override suspend fun saveBackgroundImage(bytes: ByteArray): String? =
+        imageStore.importBackgroundFromBytes(bytes)
 
     override suspend fun readImage(name: String): ImagePayload? {
         val bytes = imageStore.readBytes("${ImageStore.IMAGES_DIR}/$name") ?: return null

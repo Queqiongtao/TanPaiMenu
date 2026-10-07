@@ -6,6 +6,8 @@ import com.tanpai.menu.net.protocol.DeviceDto
 import com.tanpai.menu.net.protocol.DishCreateRequest
 import com.tanpai.menu.net.protocol.DishDto
 import com.tanpai.menu.net.protocol.DishPatchRequest
+import com.tanpai.menu.net.protocol.DisplayPatchRequest
+import com.tanpai.menu.net.protocol.DisplaySettingsDto
 import com.tanpai.menu.net.protocol.StateDto
 
 /**
@@ -73,6 +75,16 @@ interface MenuBackend {
 
     suspend fun state(): StateDto
 
+    /** 当前展示设置（背景样式 / 自定义背景图 / 蒙版与卡片透明度 / 有货提示）。见 `docs/design/0023`。 */
+    suspend fun display(): DisplaySettingsDto
+
+    /**
+     * 应用展示设置补丁（null = 不改；`backgroundImagePath` 三态）并返回应用后的完整设置。
+     *
+     * 与菜单数据无关，**不 bump 全局 `version`**；传输层负责广播 `display.updated`。
+     */
+    suspend fun applyDisplay(patch: DisplayPatchRequest): DisplaySettingsDto
+
     suspend fun categories(): List<CategoryDto>
 
     suspend fun createCategory(name: String, sortOrder: Int): CategoryDto
@@ -97,6 +109,12 @@ interface MenuBackend {
 
     /** 保存上传图片（解码 + 压缩 + 落盘），返回相对路径；解码失败返回 null。 */
     suspend fun saveImage(bytes: ByteArray): String?
+
+    /**
+     * 保存上传的**背景图**（长边 2048、JPEG 85，与平板相册导入同规格）；
+     * 解码失败返回 null。见 `docs/design/0023` 第 2.3 节。
+     */
+    suspend fun saveBackgroundImage(bytes: ByteArray): String?
 
     /** 读取图片字节；文件不存在返回 null。 */
     suspend fun readImage(name: String): ImagePayload?

@@ -4,6 +4,11 @@ build/
 .kotlin/
 !gradle/wrapper/gradle-wrapper.jar
 
+# 本机构建辅助目录（沙箱环境下的替代构建缓存 / 产物目录，不提交）
+.gradle-home/
+.gradle-alt/
+out/
+
 # Android / IDE
 local.properties
 *.apk

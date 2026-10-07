@@ -1,10 +1,12 @@
 package com.tanpai.menu.host
 
+import com.tanpai.menu.data.DisplaySpec
 import com.tanpai.menu.data.db.DishHighlight
 import com.tanpai.menu.net.protocol.CategoryCreateRequest
 import com.tanpai.menu.net.protocol.CategoryPatchRequest
 import com.tanpai.menu.net.protocol.DishCreateRequest
 import com.tanpai.menu.net.protocol.DishPatchRequest
+import com.tanpai.menu.net.protocol.DisplayPatchRequest
 import com.tanpai.menu.net.protocol.ErrorCode
 import com.tanpai.menu.net.protocol.ImageUploadDto
 import com.tanpai.menu.net.protocol.PairRequest
@@ -45,11 +47,17 @@ class HostApi(
         }
     }
 
-    /** `POST /images`：multipart 由传输层解析后交给管线做类型与大小校验。 */
+    /**
+     * `POST /images`：multipart 由传输层解析后交给管线做类型与大小校验。
+     *
+     * [kind] 来自查询参数（`docs/design/0023` 第 2.3 节）：`background` 表示按背景图规格落盘
+     * （长边 2048、JPEG 85），其余值沿用菜品图规格（长边 1280、JPEG 80）。
+     */
     suspend fun handleImageUpload(
         bearerToken: String?,
         contentType: String?,
-        bytes: ByteArray
+        bytes: ByteArray,
+        kind: String? = null
     ): HostResponse {
         if (bearerToken != tokenProvider()) return unauthorized()
         val mediaType = contentType?.substringBefore(';')?.trim()?.lowercase()
@@ -62,9 +70,13 @@ class HostApi(
         if (bytes.size > maxImageBytes) {
             return failure(413, ErrorCode.PAYLOAD_TOO_LARGE, "图片超过 10MB")
         }
+        val background = kind.equals(IMAGE_KIND_BACKGROUND, ignoreCase = true)
         return try {
-            val path = backend.saveImage(bytes)
-                ?: return failure(400, ErrorCode.INVALID_ARGUMENT, "图片解码失败")
+            val path = if (background) {
+                backend.saveBackgroundImage(bytes)
+            } else {
+                backend.saveImage(bytes)
+            } ?: return failure(400, ErrorCode.INVALID_ARGUMENT, "图片解码失败")
             json(
                 201,
                 encodeJson(
@@ -152,6 +164,9 @@ class HostApi(
 
             seg.size == 2 && seg[0] == "menu" && seg[1] == "reset" && method == "POST" ->
                 resetMenu()
+
+            seg.size == 1 && seg[0] == "display" && method == "PATCH" ->
+                patchDisplay(request)
 
             seg.size == 1 && seg[0] == "devices" && method == "GET" ->
                 json(200, encodeJson(backend.devices()))
@@ -290,6 +305,37 @@ class HostApi(
         return HostResponse.empty(204)
     }
 
+    /**
+     * `PATCH /display`：修改展示设置（`docs/design/0023` 第 2.2 节）。
+     *
+     * 字段为 null 表示不改；`backgroundImagePath` 为空串表示清除自定义背景图。
+     * 与菜单数据无关，不 bump `version`；广播由传输层在响应返回前发出。
+     */
+    private suspend fun patchDisplay(request: HostRequest): HostResponse {
+        val obj = parseBody(request) ?: return invalidBody()
+        val patch = decodeOrNull<DisplayPatchRequest>(obj) ?: return invalidBody()
+        patch.backgroundScrimPercent?.let {
+            if (it !in DisplaySpec.MIN_BACKGROUND_SCRIM_PERCENT..DisplaySpec.MAX_BACKGROUND_SCRIM_PERCENT) {
+                return failure(
+                    400,
+                    ErrorCode.INVALID_ARGUMENT,
+                    "蒙版透明度需为 ${DisplaySpec.MIN_BACKGROUND_SCRIM_PERCENT}-" +
+                        "${DisplaySpec.MAX_BACKGROUND_SCRIM_PERCENT}"
+                )
+            }
+        }
+        patch.cardAlphaPercent?.let {
+            if (it !in DisplaySpec.MIN_CARD_ALPHA_PERCENT..100) {
+                return failure(
+                    400,
+                    ErrorCode.INVALID_ARGUMENT,
+                    "卡片透明度需为 ${DisplaySpec.MIN_CARD_ALPHA_PERCENT}-100"
+                )
+            }
+        }
+        return json(200, encodeJson(backend.applyDisplay(patch)))
+    }
+
     private fun validateDishFields(
         name: String,
         priceCents: Int,
@@ -365,6 +411,8 @@ class HostApi(
     private companion object {
         const val IDEMPOTENCY_CAPACITY = 200
         const val MAX_IMAGE_BYTES = 10 * 1024 * 1024
+        /** `POST /images?kind=background`：按背景图规格落盘（`docs/design/0023` 第 2.3 节）。 */
+        const val IMAGE_KIND_BACKGROUND = "background"
         const val MAX_NAME_LENGTH = 20
         const val MAX_PRICE_CENTS = 999_999
         const val MAX_UNIT_LENGTH = 6

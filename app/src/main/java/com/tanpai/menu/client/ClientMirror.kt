@@ -2,6 +2,7 @@ package com.tanpai.menu.client
 
 import com.tanpai.menu.net.protocol.CategoryDto
 import com.tanpai.menu.net.protocol.DishDto
+import com.tanpai.menu.net.protocol.DisplaySettingsDto
 import com.tanpai.menu.net.protocol.EventType
 import com.tanpai.menu.net.protocol.IdPayload
 import com.tanpai.menu.net.protocol.StateDto
@@ -41,6 +42,10 @@ class ClientMirror {
     var clientEditsEnabled: Boolean = true
         private set
 
+    /** 展示设置（`docs/design/0023` 第 2.2 节）；由 `/state`、`snapshot` 与 `display.updated` 刷新。 */
+    var display: DisplaySettingsDto = DisplaySettingsDto()
+        private set
+
     fun applySnapshot(state: StateDto) {
         categories.clear()
         dishes.clear()
@@ -49,6 +54,7 @@ class ClientMirror {
         version = state.version
         storeName = state.storeName?.takeIf { it.isNotBlank() }
         clientEditsEnabled = state.clientEditsEnabled
+        state.display?.let { display = it }
     }
 
     fun applyEvent(event: WireEvent): EventApplyResult {
@@ -58,6 +64,12 @@ class ClientMirror {
         if (event.type == EventType.SNAPSHOT) {
             val state = event.payloadAs<StateDto>() ?: return EventApplyResult.NEED_RESYNC
             applySnapshot(state)
+            return EventApplyResult.APPLIED
+        }
+        // 展示设置与菜单版本无关：不走 `version >` 判据，直接应用（见 `docs/design/0023` 第 2.2 节）。
+        if (event.type == EventType.DISPLAY_UPDATED) {
+            val settings = event.payloadAs<DisplaySettingsDto>() ?: return EventApplyResult.NEED_RESYNC
+            display = settings
             return EventApplyResult.APPLIED
         }
         if (event.version <= version) return EventApplyResult.APPLIED
@@ -108,5 +120,6 @@ class ClientMirror {
         version = 0L
         storeName = null
         clientEditsEnabled = true
+        display = DisplaySettingsDto()
     }
 }
