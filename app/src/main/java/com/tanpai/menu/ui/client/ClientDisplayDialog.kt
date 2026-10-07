@@ -24,6 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,20 +44,25 @@ import com.tanpai.menu.data.DisplaySpec
 import com.tanpai.menu.imaging.ImageCompressor
 import com.tanpai.menu.net.protocol.DisplayPatchRequest
 import com.tanpai.menu.net.protocol.DisplaySettingsDto
-import com.tanpai.menu.ui.dialogs.ConfirmDialog
 import com.tanpai.menu.ui.theme.BackgroundStyles
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** 手机端上传背景图前先按长边 2048 压缩，主机侧再按背景图规格落盘（`docs/design/0023` 第 2.3 节）。 */
 private const val BACKGROUND_UPLOAD_MAX_EDGE = 2048
 
 /**
- * 手机端「展示设置」弹窗（`docs/design/0023` 第 2.2、2.3 节）。
+ * 手机端「展示设置」弹窗（`docs/design/0023` 第 2.2、2.3、2.6 节）。
  *
  * 可改：内置背景样式、自定义背景图（相册上传）、蒙版透明度、卡片透明度、有货提示。
- * 「恢复默认菜单」放在**客户端设置**弹窗（`ClientSettingsDialog`），见 `docs/design/0023` 第 2.5 节。
- * 确认时只提交有变化的字段；上传图片先走 [onUploadBackground]（压缩 + 上传），成功后再一并提交。
+ * 「恢复默认菜单」放在**客户端设置**弹窗（`ClientSettingsDialog`），见同文档第 2.5 节。
+ *
+ * **改动即时生效**：没有「确定」按钮——点样式、切开关立刻提交；滑条在拖动时只更新本地显示，
+ * 松手后再提交一次（避免拖动过程刷出几十个请求）。提交按 [changeSeq] 串行化，
+ * 前面排队的补丁若已被后续改动取代就跳过，保证最终落库的是最后一次操作。
+ * 上传图片先走 [onUploadBackground]（压缩 + 上传），成功后再提交新路径。
  * 离线或平板关闭手机编辑时控件禁用，由外层保证 [enabled]。
  */
 @Composable
@@ -68,16 +74,84 @@ fun ClientDisplayDialog(
     onDismiss: () -> Unit,
     onMessage: (String) -> Unit
 ) {
-    var styleId by remember { mutableStateOf(display.backgroundStyleId) }
-    var imagePath by remember { mutableStateOf(display.backgroundImagePath) }
-    var scrim by remember { mutableFloatStateOf(display.backgroundScrimPercent.toFloat()) }
-    var cardAlpha by remember { mutableFloatStateOf(display.cardAlphaPercent.toFloat()) }
-    var showStock by remember { mutableStateOf(display.showStockHint) }
+    /** 弹窗内的编辑副本：用户操作即时改它，远端回包到达后再对齐。 */
+    var draft by remember { mutableStateOf(display) }
     var busy by remember { mutableStateOf(false) }
+    /** 每次本地改动自增，作为提交串行化的序号。 */
+    var changeSeq by remember { mutableStateOf(0L) }
+    var pendingPatch by remember { mutableStateOf<DisplayPatchRequest?>(null) }
+    val submitMutex = remember { Mutex() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uploadFailedText = stringResource(R.string.client_image_upload_failed)
     val savedText = stringResource(R.string.client_display_saved)
+    val failedText = stringResource(R.string.client_display_failed)
+
+    /** 远端值变化时对齐本地副本：只覆盖用户没有正在改的字段。 */
+    LaunchedEffect(display) {
+        val patch = pendingPatch
+        draft = draft.copy(
+            backgroundStyleId = if (patch?.backgroundStyleId != null) {
+                draft.backgroundStyleId
+            } else {
+                display.backgroundStyleId
+            },
+            backgroundImagePath = if (patch?.backgroundImagePath != null) {
+                draft.backgroundImagePath
+            } else {
+                display.backgroundImagePath
+            },
+            backgroundScrimPercent = if (patch?.backgroundScrimPercent != null) {
+                draft.backgroundScrimPercent
+            } else {
+                display.backgroundScrimPercent
+            },
+            cardAlphaPercent = if (patch?.cardAlphaPercent != null) {
+                draft.cardAlphaPercent
+            } else {
+                display.cardAlphaPercent
+            },
+            showStockHint = if (patch?.showStockHint != null) {
+                draft.showStockHint
+            } else {
+                display.showStockHint
+            }
+        )
+    }
+
+    /** 提交一次改动：串行执行，若期间又有新改动（序号前进）就让位给后者。 */
+    LaunchedEffect(changeSeq) {
+        val seq = changeSeq
+        val patch = pendingPatch ?: return@LaunchedEffect
+        submitMutex.withLock {
+            // 已有更新的改动在排队：本次直接跳过，最终落库的是最后一次操作。
+            if (seq != changeSeq) return@withLock
+            val result = onSubmit(patch)
+            if (seq != changeSeq) return@withLock
+            pendingPatch = null
+            result.fold(
+                onSuccess = { onMessage(savedText) },
+                onFailure = { error ->
+                    // 失败时回到主机当前值，避免界面显示一个并未生效的设置。
+                    draft = display
+                    onMessage(
+                        if (error.message.isNullOrBlank()) {
+                            failedText
+                        } else {
+                            context.getString(R.string.client_submit_failed, error.message.orEmpty())
+                        }
+                    )
+                }
+            )
+        }
+    }
+
+    /** 记录一次本地改动并触发提交。 */
+    fun change(draftNext: DisplaySettingsDto, patch: DisplayPatchRequest) {
+        draft = draftNext
+        pendingPatch = patch
+        changeSeq += 1
+    }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -90,8 +164,10 @@ fun ClientDisplayDialog(
             if (path == null) {
                 onMessage(uploadFailedText)
             } else {
-                imagePath = path
-                styleId = null
+                change(
+                    draft.copy(backgroundImagePath = path, backgroundStyleId = null),
+                    DisplayPatchRequest(backgroundImagePath = path)
+                )
             }
         }
     }
@@ -111,11 +187,13 @@ fun ClientDisplayDialog(
                     style = MaterialTheme.typography.titleSmall
                 )
                 BackgroundStyleGrid(
-                    selectedId = if (imagePath == null) styleId else null,
+                    selectedId = if (draft.backgroundImagePath == null) draft.backgroundStyleId else null,
                     enabled = enabled && !busy,
                     onSelect = { id ->
-                        styleId = id
-                        imagePath = null
+                        change(
+                            draft.copy(backgroundStyleId = id, backgroundImagePath = null),
+                            DisplayPatchRequest(backgroundStyleId = id)
+                        )
                     }
                 )
                 Row(
@@ -123,7 +201,7 @@ fun ClientDisplayDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (imagePath == null) {
+                        text = if (draft.backgroundImagePath == null) {
                             stringResource(R.string.client_display_image_none)
                         } else {
                             stringResource(R.string.client_display_image_set)
@@ -138,9 +216,20 @@ fun ClientDisplayDialog(
                     ) {
                         Text(stringResource(R.string.client_display_pick_image))
                     }
-                    if (imagePath != null) {
+                    if (draft.backgroundImagePath != null) {
+                        // 清除自定义图 = 回到默认内置样式（喜庆红），与平板侧语义一致。
                         TextButton(
-                            onClick = { imagePath = null },
+                            onClick = {
+                                change(
+                                    draft.copy(
+                                        backgroundImagePath = null,
+                                        backgroundStyleId = BackgroundStyles.DEFAULT_ID
+                                    ),
+                                    DisplayPatchRequest(
+                                        backgroundStyleId = BackgroundStyles.DEFAULT_ID
+                                    )
+                                )
+                            },
                             enabled = enabled && !busy
                         ) {
                             Text(stringResource(R.string.client_display_clear_image))
@@ -148,21 +237,60 @@ fun ClientDisplayDialog(
                     }
                 }
 
+                // 滑条拖动期间只改本地值，松手后才提交（onValueChangeFinished）。
+                var scrimDraft by remember { mutableFloatStateOf(draft.backgroundScrimPercent.toFloat()) }
                 SliderRow(
-                    label = stringResource(R.string.client_display_scrim, scrim.roundToInt()),
-                    value = scrim,
+                    label = stringResource(R.string.client_display_scrim, scrimDraft.roundToInt()),
+                    value = scrimDraft,
                     valueRange = DisplaySpec.MIN_BACKGROUND_SCRIM_PERCENT.toFloat()..
                         DisplaySpec.MAX_BACKGROUND_SCRIM_PERCENT.toFloat(),
                     enabled = enabled && !busy,
-                    onChange = { scrim = it }
+                    onChange = { scrimDraft = it },
+                    onFinished = {
+                        val value = scrimDraft.roundToInt()
+                        if (value != draft.backgroundScrimPercent) {
+                            change(
+                                draft.copy(backgroundScrimPercent = value),
+                                DisplayPatchRequest(backgroundScrimPercent = value)
+                            )
+                        }
+                    }
                 )
+
+                var cardAlphaDraft by remember {
+                    mutableFloatStateOf(draft.cardAlphaPercent.toFloat())
+                }
                 SliderRow(
-                    label = stringResource(R.string.client_display_card_alpha, cardAlpha.roundToInt()),
-                    value = cardAlpha,
+                    label = stringResource(
+                        R.string.client_display_card_alpha,
+                        cardAlphaDraft.roundToInt()
+                    ),
+                    value = cardAlphaDraft,
                     valueRange = DisplaySpec.MIN_CARD_ALPHA_PERCENT.toFloat()..100f,
                     enabled = enabled && !busy,
-                    onChange = { cardAlpha = it }
+                    onChange = { cardAlphaDraft = it },
+                    onFinished = {
+                        val value = cardAlphaDraft.roundToInt()
+                        if (value != draft.cardAlphaPercent) {
+                            change(
+                                draft.copy(cardAlphaPercent = value),
+                                DisplayPatchRequest(cardAlphaPercent = value)
+                            )
+                        }
+                    }
                 )
+
+                // 远端改过透明度时，把滑条本地值对齐（用户没在拖的时候）。
+                LaunchedEffect(display.backgroundScrimPercent) {
+                    if (pendingPatch?.backgroundScrimPercent == null) {
+                        scrimDraft = display.backgroundScrimPercent.toFloat()
+                    }
+                }
+                LaunchedEffect(display.cardAlphaPercent) {
+                    if (pendingPatch?.cardAlphaPercent == null) {
+                        cardAlphaDraft = display.cardAlphaPercent.toFloat()
+                    }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -174,56 +302,27 @@ fun ClientDisplayDialog(
                         modifier = Modifier.weight(1f)
                     )
                     Switch(
-                        checked = showStock,
-                        onCheckedChange = { showStock = it },
+                        checked = draft.showStockHint,
+                        onCheckedChange = { checked ->
+                            change(
+                                draft.copy(showStockHint = checked),
+                                DisplayPatchRequest(showStockHint = checked)
+                            )
+                        },
                         enabled = enabled && !busy
                     )
                 }
+                Text(
+                    text = stringResource(R.string.client_display_live_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
+        // 即时生效后不再需要「确定」，只留关闭。
         confirmButton = {
-            TextButton(
-                enabled = enabled && !busy,
-                onClick = {
-                    busy = true
-                    scope.launch {
-                        val result = onSubmit(
-                            DisplayPatchRequest(
-                                backgroundStyleId = if (styleId != display.backgroundStyleId) styleId else null,
-                                backgroundImagePath = if (imagePath != display.backgroundImagePath) {
-                                    imagePath.orEmpty()
-                                } else {
-                                    null
-                                },
-                                backgroundScrimPercent = scrim.roundToInt()
-                                    .takeIf { it != display.backgroundScrimPercent },
-                                cardAlphaPercent = cardAlpha.roundToInt()
-                                    .takeIf { it != display.cardAlphaPercent },
-                                showStockHint = showStock.takeIf { it != display.showStockHint }
-                            )
-                        )
-                        busy = false
-                        result.fold(
-                            onSuccess = {
-                                onMessage(savedText)
-                                onDismiss()
-                            },
-                            onFailure = { error ->
-                                onMessage(
-                                    context.getString(
-                                        R.string.client_submit_failed,
-                                        error.message.orEmpty()
-                                    )
-                                )
-                            }
-                        )
-                    }
-                }
-            ) { Text(stringResource(R.string.client_confirm)) }
-        },
-        dismissButton = {
             TextButton(onClick = onDismiss, enabled = !busy) {
-                Text(stringResource(R.string.admin_cancel))
+                Text(stringResource(R.string.client_close))
             }
         }
     )
@@ -293,13 +392,15 @@ private fun SliderRow(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     enabled: Boolean,
-    onChange: (Float) -> Unit
+    onChange: (Float) -> Unit,
+    onFinished: () -> Unit
 ) {
     Column {
         Text(text = label, style = MaterialTheme.typography.bodyMedium)
         Slider(
             value = value,
             onValueChange = onChange,
+            onValueChangeFinished = onFinished,
             valueRange = valueRange,
             enabled = enabled
         )
