@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.tanpai.menu.R
@@ -77,6 +78,17 @@ private val ClientThumbnailSize = 56.dp
 
 /** 「正在重连」状态点颜色（琥珀，区别于在线绿与失效红）。 */
 private val ReconnectingColor = Color(0xFFB26A00)
+
+/** 列表底部为悬浮按钮预留的高度：按钮 56dp + 与内容的间距 16dp + 安全余量 16dp。 */
+private val FAB_CLEARANCE = 88.dp
+
+/**
+ * 计算列表底部需要为悬浮按钮预留的高度：只在「管理模式 + 选中分类（按钮会出现）」时预留。
+ *
+ * 抽成纯函数以便单测覆盖——真机上按钮会盖住最后一行右对齐的「沽清 / 删除」。
+ */
+internal fun dishListBottomClearance(adminMode: Boolean, hasSelectedCategory: Boolean): Dp =
+    if (adminMode && hasSelectedCategory) FAB_CLEARANCE else 0.dp
 
 /**
  * 客户端菜单页（`docs/design/0019` 第 2.2 节、`docs/design/0020` 第 2.1 节）。
@@ -186,7 +198,14 @@ fun ClientMenuScreen(
                 if (dishes.isEmpty()) {
                     CenterHint(stringResource(R.string.display_no_dishes))
                 } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    // 管理模式下每行末尾是右对齐的「沽清 / 删除」，正好落在右下角悬浮按钮下方，
+                    // 因此列表底部按按钮高度 + 间距留白，避免遮挡（`docs/design/0023` 第 2.1 节）。
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            bottom = dishListBottomClearance(editingEnabled, selectedCategory != null)
+                        )
+                    ) {
                         items(dishes, key = { it.id }) { dish ->
                             ClientDishRow(
                                 dish = dish,
