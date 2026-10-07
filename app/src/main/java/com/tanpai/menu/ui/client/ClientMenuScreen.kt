@@ -108,6 +108,7 @@ private data class DishMenuTarget(val dish: DishDto, val position: IntOffset)
  * 失败由 Snackbar 展示主机返回的中文错误。
  *
  * [adminMode] 由 `ClientApp` 持有：进入管理模式后每行显示操作按钮、底部出现「新增菜品」。
+ * 「展示设置 / 恢复默认菜单」由 `ClientApp` 的设置弹窗承载，本页只负责菜单列表与二次确认。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,6 +118,8 @@ fun ClientMenuScreen(
     snackbarHostState: SnackbarHostState,
     onToggleAdminMode: () -> Unit,
     onOpenSettings: () -> Unit,
+    /** 顶栏「⋯ 更多」已取消；本页只保留二次确认，真正的提交由 [onResetMenu] 交给 `ClientApp`。 */
+    onResetMenu: () -> Unit,
     onCreateCaptureUri: () -> Uri,
     onImportImage: suspend (Uri) -> String?,
     onSubmit: suspend (ClientCommand) -> Result<Unit>
@@ -141,7 +144,6 @@ fun ClientMenuScreen(
 
     /** 各菜品行在窗口中的位置；长按菜单按行定位。 */
     val rowOrigins = remember { mutableStateMapOf<Long, Offset>() }
-    var showMore by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.categories) {
@@ -175,7 +177,6 @@ fun ClientMenuScreen(
                 adminMode = adminMode,
                 canManage = state.canEdit,
                 onToggleAdminMode = onToggleAdminMode,
-                onOpenMore = { showMore = true },
                 onOpenSettings = onOpenSettings
             )
         },
@@ -363,31 +364,14 @@ fun ClientMenuScreen(
         )
     }
 
-    if (showMore) {
-        AlertDialog(
-            onDismissRequest = { showMore = false },
-            title = { Text(stringResource(R.string.client_admin_more)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showMore = false
-                        showResetConfirm = true
-                    }
-                ) { Text(stringResource(R.string.settings_reset_seed)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showMore = false }) {
-                    Text(stringResource(R.string.admin_cancel))
-                }
-            }
-        )
-    }
-
     if (showResetConfirm) {
         ConfirmDialog(
             title = stringResource(R.string.settings_reset_seed),
             text = stringResource(R.string.settings_reset_seed_confirm),
-            onConfirm = { submit(ClientCommand.ResetMenu) },
+            onConfirm = {
+                showResetConfirm = false
+                onResetMenu()
+            },
             onDismiss = { showResetConfirm = false }
         )
     }
@@ -399,7 +383,6 @@ private fun ClientTopBar(
     adminMode: Boolean,
     canManage: Boolean,
     onToggleAdminMode: () -> Unit,
-    onOpenMore: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
@@ -443,11 +426,6 @@ private fun ClientTopBar(
                             if (adminMode) R.string.client_admin_exit else R.string.client_admin_enter
                         )
                     )
-                }
-            }
-            if (adminMode) {
-                TextButton(onClick = onOpenMore) {
-                    Text(stringResource(R.string.client_admin_more))
                 }
             }
             TextButton(onClick = onOpenSettings) {

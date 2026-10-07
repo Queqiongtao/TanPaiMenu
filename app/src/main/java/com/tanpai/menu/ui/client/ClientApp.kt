@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.tanpai.menu.R
+import com.tanpai.menu.client.ClientCommand
 import com.tanpai.menu.client.ClientSession
 import com.tanpai.menu.client.PairingClient
 import com.tanpai.menu.data.SettingsStore
@@ -49,6 +50,7 @@ fun ClientApp(
     val context = LocalContext.current
     val uploadFailedText = stringResource(R.string.client_image_upload_failed)
     val backgroundUploadFailedText = stringResource(R.string.client_display_upload_failed)
+    val resetDoneText = stringResource(R.string.settings_reset_seed_done)
 
     LaunchedEffect(paired) {
         if (paired) session.start() else session.stop()
@@ -91,12 +93,27 @@ fun ClientApp(
         path
     }
 
+    /** 恢复默认菜单：主机清空菜单与图片、写回默认 12 道并广播快照；成功/失败都给提示。 */
+    val resetMenu: () -> Unit = {
+        scope.launch {
+            session.submit(ClientCommand.ResetMenu).fold(
+                onSuccess = { snackbarHostState.showSnackbar(resetDoneText) },
+                onFailure = { error ->
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.client_submit_failed, error.message.orEmpty())
+                    )
+                }
+            )
+        }
+    }
+
     ClientMenuScreen(
         state = state,
         adminMode = adminMode,
         snackbarHostState = snackbarHostState,
         onToggleAdminMode = { adminMode = !adminMode },
         onOpenSettings = { showSettings = true },
+        onResetMenu = resetMenu,
         onCreateCaptureUri = onCreateCaptureUri,
         onImportImage = onImportImage,
         onSubmit = { command -> session.submit(command) }
@@ -108,6 +125,10 @@ fun ClientApp(
             onOpenDisplay = {
                 showSettings = false
                 showDisplay = true
+            },
+            onResetMenu = {
+                showSettings = false
+                resetMenu()
             },
             onReconnect = { session.reconnect() },
             onRepair = {

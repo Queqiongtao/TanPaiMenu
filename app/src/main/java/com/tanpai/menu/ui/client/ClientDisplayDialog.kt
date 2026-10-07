@@ -43,6 +43,7 @@ import com.tanpai.menu.data.DisplaySpec
 import com.tanpai.menu.imaging.ImageCompressor
 import com.tanpai.menu.net.protocol.DisplayPatchRequest
 import com.tanpai.menu.net.protocol.DisplaySettingsDto
+import com.tanpai.menu.ui.dialogs.ConfirmDialog
 import com.tanpai.menu.ui.theme.BackgroundStyles
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -54,6 +55,7 @@ private const val BACKGROUND_UPLOAD_MAX_EDGE = 2048
  * 手机端「展示设置」弹窗（`docs/design/0023` 第 2.2、2.3 节）。
  *
  * 可改：内置背景样式、自定义背景图（相册上传）、蒙版透明度、卡片透明度、有货提示。
+ * 「恢复默认菜单」放在**客户端设置**弹窗（`ClientSettingsDialog`），见 `docs/design/0023` 第 2.5 节。
  * 确认时只提交有变化的字段；上传图片先走 [onUploadBackground]（压缩 + 上传），成功后再一并提交。
  * 离线或平板关闭手机编辑时控件禁用，由外层保证 [enabled]。
  */

@@ -189,7 +189,6 @@
 
     <string name="client_admin_enter">管理</string>
     <string name="client_admin_exit">完成</string>
-    <string name="client_admin_more">⋯ 更多</string>
     <string name="client_admin_add_category">＋ 新增分类</string>
     <string name="client_admin_add_dish">＋ 新增菜品</string>
     <string name="client_admin_category_edit">重命名 / 改排序</string>
