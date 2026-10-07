@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 24–25 的圆形启动图标：内容与 `mipmap-anydpi/ic_launcher.xml` 相同
+  （本身就是圆形底，天然适配圆形遮罩）。自适应图标的圆形版本见 `mipmap-anydpi-v26/ic_launcher_round.xml`。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path android:pathData="M54,54 m-54,0 a54,54 0 1,0 108,0 a54,54 0 1,0 -108,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54" android:startY="0"
+                android:endX="54" android:endY="108"
+                android:type="linear">
+                <item android:offset="0" android:color="#D8563E" />
+                <item android:offset="1" android:color="#92301E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path
+        android:pathData="M44,42 C40,38 48,36 44,32"
+        android:strokeColor="#FFE9DC"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M64,42 C68,38 60,36 64,32"
+        android:strokeColor="#FFE9DC"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round" />
+
+    <path
+        android:pathData="M34,54 L74,54 L71,76 Q69.5,83 62,83 L46,83 Q38.5,83 37,76 Z"
+        android:fillColor="#FAF7F0" />
+
+    <path
+        android:pathData="M41,52 m-8,0 a8,6.2 0 1,0 16,0 a8,6.2 0 1,0 -16,0"
+        android:fillColor="#FDEFD4" />
+    <path
+        android:pathData="M54,50 m-9,0 a9,7 0 1,0 18,0 a9,7 0 1,0 -18,0"
+        android:fillColor="#FDEFD4" />
+    <path
+        android:pathData="M67,52 m-8,0 a8,6.2 0 1,0 16,0 a8,6.2 0 1,0 -16,0"
+        android:fillColor="#FDEFD4" />
+
+    <path
+        android:pathData="M34,54 L74,54"
+        android:strokeColor="#FAF7F0"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+</vector>

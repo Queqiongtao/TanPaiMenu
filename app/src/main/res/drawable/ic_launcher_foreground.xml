@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  应用图标前景：白瓷碗 + 三只馄饨 + 两缕热气（docs/design/0024）。
+  108dp 画布，主体收在中央约 66dp 安全区内（不被启动器遮罩裁掉）；图形只有两种米白，保持扁平。
+
+  关于字体：图标要显示的「馄饨」二字无法在矢量资源中渲染（矢量 drawable 不支持 textPath），
+  而普通位图图标在本机沙箱下无法写入二进制文件；故改为纯图形方案——碗与馄饨在小尺寸下同样可辨。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 热气：两缕向上飘的曲线，圆头收尾 -->
+    <path
+        android:pathData="M44,40 C40,36 48,34 44,30"
+        android:strokeColor="#FFE9DC"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M64,40 C68,36 60,34 64,30"
+        android:strokeColor="#FFE9DC"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round" />
+
+    <!-- 碗身：碗沿 → 碗底 → 圆角碗底 → 回到碗沿 -->
+    <path
+        android:pathData="M32,54 L76,54 L73,78 Q71.5,85 64,85 L44,85 Q36.5,85 35,78 Z"
+        android:fillColor="#FAF7F0" />
+
+    <!-- 三只馄饨卧在碗口：左、中（略高略大）、右 -->
+    <path
+        android:pathData="M39,52 m-8.5,0 a8.5,6.6 0 1,0 17,0 a8.5,6.6 0 1,0 -17,0"
+        android:fillColor="#FDEFD4" />
+    <path
+        android:pathData="M54,50 m-9.5,0 a9.5,7.4 0 1,0 19,0 a9.5,7.4 0 1,0 -19,0"
+        android:fillColor="#FDEFD4" />
+    <path
+        android:pathData="M69,52 m-8.5,0 a8.5,6.6 0 1,0 17,0 a8.5,6.6 0 1,0 -17,0"
+        android:fillColor="#FDEFD4" />
+
+    <!-- 碗沿描一圈，压住馄饨下沿并强化碗的轮廓 -->
+    <path
+        android:pathData="M32,54 L76,54"
+        android:strokeColor="#FAF7F0"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round" />
+</vector>

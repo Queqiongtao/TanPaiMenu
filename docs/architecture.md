@@ -137,3 +137,4 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-07 | Phase 5 设计定稿：手机端扫码配对（默认开相机，手动配对折叠保留），相机用 Camera2 + zxing core（零新增依赖），二维码内容与主机协议不变 | 0022 |
 | 2026-10-07 | M12 落地：`net/PairQr` 解析二维码、`PairingClient.pairByQr` 落盘凭据、新包 `qrcode/`（Camera2 预览 + 取帧 + zxing 解码）、`ui/client` 扫码配对页；APK 0.2.0；单测 162 项、构建通过 | 0022、0019、0002 |
 | 2026-10-07 | M13 落地：手机端分类 / 菜品行内删除 + 二次确认；展示设置下发与可改（`PATCH /display` + `display.updated` + `/images?kind=background`）；`DisplaySettingsState` 让展示页对设置变更即时重绘；补 `tanpai://pair` 配对深链接；单测 169 项通过 | 0023、0001、0020 |
+| 2026-10-07 | 新增应用图标：暖红渐变底 + 白碗馄饨（矢量 XML），API 26+ 走自适应图标、API 24–25 走自带圆底的旧版图标 | 0024 |
