@@ -18,13 +18,13 @@ app/src/main/java/com/tanpai/menu/
 ├─ data/        # Room 实体、DAO、Repository、设置、AppMeta（全局 version）
 ├─ domain/      # 纯业务规则（卖出 / 撤销策略、价格格式化）
 ├─ host/        # 主机侧：NanoHTTPD REST/WS、前台服务保活与常驻通知、连接管理、配对与鉴权
-├─ client/      # 客户端侧：发现、连接、镜像状态、重连
+├─ client/      # 客户端侧：配对、连接会话、内存镜像、重连退避（M10）
 ├─ net/protocol/ # 契约 DTO、ISO-8601、实体 ↔ DTO 映射（主机与客户端共用）
-├─ net/         # REST 客户端、WS 客户端（Phase 3）
+├─ net/         # 主机地址解析、REST 客户端、WS 客户端（M10）
 ├─ ui/display/  # 顾客展示页（2 列 × 6 行横卡；自定义背景图 / 内置样式与白色蒙版；店名左侧微信二维码（店主上传或内置默认）与点击放大浮层；内置字体见 ui/theme）
 ├─ ui/admin/    # 管理与设置页（双端共用）
 ├─ ui/theme/    # 字体（Noto Sans SC Bold + 店名专用霞鹜文楷子集）、字型、展示页状态语义色、店名招牌配色与内置背景样式
-├─ ui/client/   # 手机客户端管理页（复用 admin 组件）
+├─ ui/client/   # 手机客户端界面：配对页 / 只读菜单页 / 设置弹窗（M10；编辑页 M11）
 ├─ imaging/     # 压缩、存储、加载
 ├─ backup/      # 备份格式（format 1）与导出 / 导入
 ├─ logging/     # TpLog 落盘日志
@@ -33,7 +33,7 @@ app/src/main/java/com/tanpai/menu/
 
 模块边界：`host` 与 `client` 不互相引用；跨模块只经 `net` / `data` 的接口与 DTO 交互。
 
-Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 已落地 `net/protocol` 与 `host`（M6 契约与单写者、M7 REST / WS 与配对信息、M8 前台服务保活 / 启停开关 / 在线设备列表）；`net`（客户端）、`client`、`ui/client` 为 Phase 3 预留。
+Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 已落地 `net/protocol` 与 `host`（M6 契约与单写者、M7 REST / WS 与配对信息、M8 前台服务保活 / 启停开关 / 在线设备列表、M9 契约测试与文档回填）；Phase 3 的 M10 已落地 `net`（地址解析 / REST / WS 客户端）、`client`（配对 / 会话 / 镜像 / 退避）与 `ui/client`（配对页 / 只读菜单页），角色分流入 `data/Role.kt` 与 `MainActivity`。
 
 ## 3. 关键流程与数据流
 
@@ -124,3 +124,4 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-06 | M7 落地：局域网 REST /api/v1/* + WS /ws、Bearer 鉴权与幂等、设备注册表与库 1→2 迁移、开机自启与管理页配对信息（地址 / 配对码 / 二维码 / 更换） | 0015、0002 |
 | 2026-10-07 | M8 落地：主机前台服务保活与启停开关、在线设备列表（实时 WS 快照）、WS 心跳修复、日志分级 | 0016、0002 |
 | 2026-10-07 | 门禁补齐：修改管理密码、关闭密码保护、忘记密码长按重置 | 0017、0003 |
+| 2026-10-07 | M10 落地：角色选择与运行形态分流（`Role` / `MainActivity` / `App.applyRole`）、一次性 6 位配对码与 `POST /pair`、手机客户端只读浏览与断线重连（`net/` + `client/` + `ui/client/`）；OkHttp 升为直接依赖 | 0018、0019、0001、0002、0015 |

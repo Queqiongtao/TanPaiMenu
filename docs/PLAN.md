@@ -1,6 +1,6 @@
 # TanPaiMenu 摆摊电子菜单 —— 开发计划
 
-> 版本：v1.8 ｜ 状态：Phase 2 进行中（M6、M7、M8 已完成）｜ 更新日期：2026-10-07
+> 版本：v1.9 ｜ 状态：Phase 2 已完成（M6-M9），Phase 3 进行中（M10 已完成、M11 待做）｜ 更新日期：2026-10-07
 
 修订历史：
 
@@ -13,6 +13,8 @@
 | v1.5 | 2026-10-05 | 展示页紧凑化（一屏 12 道）与默认菜单改写为大金馄饨 12 道；新增 0006 设计文档。 |
 | v1.6 | 2026-10-06 | 展示页默认喜庆红背景（蒙版 25%）、整数价格省略小数位、内置默认微信二维码与设置弹窗排版修正；新增 0011 设计文档。 |
 | v1.7 | 2026-10-06 | M7 完成：局域网 REST / WS、Bearer 鉴权与幂等、设备注册表与库 1→2 迁移、开机自启与管理页配对信息；请求体按 UTF-8 显式解码修复中文乱码；新增 0015 设计文档。 |
+| v1.8 | 2026-10-07 | M8 完成：主机前台服务保活与启停开关、在线设备列表、WS 心跳修复；门禁补齐修改 / 关闭 / 重置管理密码；新增 0016、0017 设计文档。 |
+| v1.9 | 2026-10-07 | Phase 2 收尾（M9 随 M10 交付）；Phase 3 拆分 M10 / M11：M10 交付角色选择、一次性 6 位配对码与手机客户端只读浏览；新增 0018、0019 设计文档。 |
 
 ## 1. 项目概述
 
@@ -123,6 +125,7 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 | PATCH / DELETE | `/dishes/{id}` | 修改 / 删除菜品 |
 | POST | `/dishes/{id}/sell` | 余量 -1；减到 0 自动置为沽清 |
 | POST | `/dishes/{id}/unsell` | 撤销最近一次卖出（余量 +1，并清除自动沽清） |
+| POST | `/pair` | 用一次性 6 位配对码换取长期 token；**无需** Bearer（见 `docs/design/0019`） |
 | POST | `/images` | multipart 上传图片，返回可访问的图片 URL |
 | GET | `/images/{name}` | 读取图片字节流 |
 | GET | `/devices` | 在线客户端列表 |
@@ -140,9 +143,10 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 
 ### 4.5 客户端行为
 
-- 连接断开：顶部显示离线条幅（只读），所有编辑入口禁用；缓存上次主机 IP 并自动重试。
-- 提交命令：先做乐观更新，主机返回失败时回滚并提示原因。
-- 图片上传：手机侧压缩后再传，主机落盘并在广播中下发新 URL。
+- 接入：首启选「手机客户端」，输入平板地址（`IP:端口` 或 `http://IP:端口`）与一次性 6 位配对码换取长期 token；不做扫码与 `NsdManager` 发现（列入后续可扩展）。
+- 同步：配对后先拉 `GET /state` 全量快照，再连 `/ws` 订阅增量；`version` 不大于本地的事件直接丢弃。
+- 连接断开：顶部显示只读条幅并保留最后一次同步的菜单，按 1/2/4/8/15 秒退避后固定 15 秒重试；配对失效（401 / WS 4401）停止重试并提示重新配对。
+- 提交命令与图片上传（乐观更新、失败回滚、手机侧压缩）：M11。
 
 ## 5. 数据模型（Room 实体）
 
@@ -227,7 +231,7 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 | M6 | 契约 DTO / 映射 / ISO-8601（`net/protocol`）、单写者锁与 `MenuChange` 事件流（`data`） | 已完成 |
 | M7 | NanoHTTPD REST + WS、鉴权与幂等缓存、设备注册表与库迁移 | 已完成 |
 | M8 | 前台服务保活、启停开关、在线设备列表（配对信息展示已随 M7 交付） | 已完成 |
-| M9 | JVM 契约测试与真机多端验收、文档回填 | 未开始（依赖 Phase 3 手机客户端接入） |
+| M9 | JVM 契约测试与真机多端验收、文档回填 | 已完成（随 M10 一并交付） |
 
 **M6 实现与验证（2026-10-05）**：
 
@@ -258,15 +262,29 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 
 **验收**：用 `curl` 与浏览器逐条验证接口契约；token 错误返回 401；两台设备连接后均能收到广播。
 
-### Phase 3：手机客户端
+### Phase 3：手机客户端 —— 进行中（M10 已完成）
 
-- 角色选择页；扫码（zxing-android-embedded）、`NsdManager` 自动发现、手动输入 IP 三种接入方式。
-- 客户端管理 UI：完整菜单编辑（含图片上传），复用 Phase 1 的 Compose 组件。
-- 乐观更新 + 失败回滚；断线只读条幅与自动重连。
+同一个 APK 增加「手机客户端」角色：首启选角色，客户端不落库、不启前台服务，凭平板地址 + 一次性 6 位配对码接入，只读浏览菜单并实时跟随平板变更。
 
-**文档产出**：更新 `docs/design/0002-局域网配对与同步.md` 客户端行为小节与 `docs/architecture.md` 客户端模块章节。
+**子阶段拆解**：
 
-**验收**：手机上改价 / 传图，平板展示页 1 秒内更新；拔网后手机变只读，恢复网络后自动重连并回到可编辑状态。
+| 子阶段 | 内容 | 状态 |
+| --- | --- | --- |
+| M10 | 角色选择与运行形态分流（0018）、一次性 6 位配对码与 `POST /pair`、客户端只读浏览与断线重连（0019） | 已完成 |
+| M11 | 客户端编辑：新增 / 改价 / 传图 / 卖出 / 撤销 / 沽清，乐观更新与失败回滚 | 未开始 |
+
+**M10 实现与验证（2026-10-07）**：
+
+- 角色与分流：`data/Role.kt` + `SettingsStore.role`；`App.applyRole` / `enterHostMode`；`MainActivity` 按角色渲染 `RoleSelectScreen` / `TanPaiMenuApp` / `ui/client/ClientApp`，并按角色切换系统栏；`BootReceiver` 仅主机形态自启。
+- 配对：`host/PairCodeManager`（6 位、5 分钟有效、一次性、连续失败 5 次锁定 60 秒）与 `HostApi.handlePair`（显式跳过鉴权）；管理页设置弹窗新增「显示配对码」区块（大号码 + 剩余时间 + 最近配对设备），原 64 位长期令牌改名保留。
+- 客户端栈：`net/HostAddress`、`net/HostRestClient`、`net/MenuSocketClient`、`client/ClientMirror`、`client/ClientSession`、`client/PairingClient`、`client/ReconnectionPolicy`；界面 `ui/client/`（配对页 / 只读菜单页 / 设置弹窗）。
+- 依赖：OkHttp 由 Coil 传递依赖升为直接依赖 `libs.okhttp.core`（无新增下载）。
+- 验证：JVM 单测 128 项通过（新增 `PairCodeManagerTest`、`HostAddressTest`、`EventPayloadTest`、`ClientMirrorTest`、`ReconnectionPolicyTest`，以及 `HostApiTest` 的 `/pair` 用例）；平板仪表测试 47 项通过（新增 `ClientSessionTest`：真机连 `127.0.0.1` 跑通「配对 → 快照 → 改价收 `dish.updated` → 停服离线只读 → 重启自愈」）。
+- 修复：`HostRestClient` 统一在内部规范化主机地址（此前 `GET /state` 直接拼接用户输入原文，导致真机上「缺 scheme」连接失败，由 `ClientSessionTest` 捕获）。
+
+**文档产出**：`docs/design/0018-角色选择与客户端运行形态.md`、`docs/design/0019-手机客户端配对与只读浏览.md`；更新 `0001`（`POST /pair` 契约）、`0002`（客户端接入）、`0015`（路由与非鉴权端点）与 `docs/architecture.md`。
+
+**验收**：平板显示 6 位配对码，手机输入平板地址 + 码即看到 12 道菜；平板改价手机 1 秒内更新；手机断网出现只读条幅、恢复后自动重连；平板关闭「手机控制端」手机离线、重新打开自愈；平板在线设备列表可见该手机。
 
 ### Phase 4：动画与打磨（最后做）
 
