@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -45,14 +46,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
 import coil.compose.AsyncImage
 import com.tanpai.menu.R
 import com.tanpai.menu.client.ClientCommand
@@ -71,6 +77,7 @@ import com.tanpai.menu.ui.dialogs.DishEditDialog
 import com.tanpai.menu.ui.theme.ChineseFontFamily
 import com.tanpai.menu.ui.theme.PriceColors
 import com.tanpai.menu.ui.theme.StatusColors
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /** 客户端菜品缩略图边长；与展示页保持同一量级，便于店主一眼比对。 */
@@ -85,10 +92,13 @@ private val FAB_CLEARANCE = 88.dp
 /**
  * 计算列表底部需要为悬浮按钮预留的高度：只在「管理模式 + 选中分类（按钮会出现）」时预留。
  *
- * 抽成纯函数以便单测覆盖——真机上按钮会盖住最后一行右对齐的「沽清 / 删除」。
+ * 抽成纯函数以便单测覆盖——真机上按钮会盖住最后一行右对齐的「沽清 / 恢复」。
  */
 internal fun dishListBottomClearance(adminMode: Boolean, hasSelectedCategory: Boolean): Dp =
     if (adminMode && hasSelectedCategory) FAB_CLEARANCE else 0.dp
+
+/** 长按菜品弹出的操作菜单目标：菜品 + 弹出位置（相对窗口的像素）。 */
+private data class DishMenuTarget(val dish: DishDto, val position: IntOffset)
 
 /**
  * 客户端菜单页（`docs/design/0019` 第 2.2 节、`docs/design/0020` 第 2.1 节）。
@@ -123,8 +133,14 @@ fun ClientMenuScreen(
     var showNewDish by remember { mutableStateOf(false) }
     var editingDish by remember { mutableStateOf<Dish?>(null) }
 
-    /** 待确认删除的菜品：直接持有契约 DTO（行内删除按钮传入的也是 DTO）。 */
+    /** 待确认删除的菜品：直接持有契约 DTO（长按菜单传入的也是 DTO）。 */
     var deletingDish by remember { mutableStateOf<DishDto?>(null) }
+
+    /** 长按弹出的菜品操作菜单：记录菜品与整行位置（按行定位 Popup）。 */
+    var dishMenu by remember { mutableStateOf<DishMenuTarget?>(null) }
+
+    /** 各菜品行在窗口中的位置；长按菜单按行定位。 */
+    val rowOrigins = remember { mutableStateMapOf<Long, Offset>() }
     var showMore by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
 
@@ -198,7 +214,7 @@ fun ClientMenuScreen(
                 if (dishes.isEmpty()) {
                     CenterHint(stringResource(R.string.display_no_dishes))
                 } else {
-                    // 管理模式下每行末尾是右对齐的「沽清 / 删除」，正好落在右下角悬浮按钮下方，
+                    // 管理模式下每行末尾的「沽清 / 恢复」右对齐，会落在右下角悬浮按钮附近，
                     // 因此列表底部按按钮高度 + 间距留白，避免遮挡（`docs/design/0023` 第 2.1 节）。
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -219,10 +235,41 @@ fun ClientMenuScreen(
                                 onSoldOutChange = { soldOut ->
                                     submit(ClientCommand.SetSoldOut(dish.id, soldOut))
                                 },
-                                onRequestDelete = { deletingDish = dish }
+                                onPositioned = { position -> rowOrigins[dish.id] = position },
+                                onLongPress = {
+                                    val origin = rowOrigins[dish.id] ?: Offset.Zero
+                                    dishMenu = DishMenuTarget(
+                                        dish = dish,
+                                        position = IntOffset(origin.x.roundToInt(), origin.y.roundToInt())
+                                    )
+                                }
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // 菜品长按菜单：只放「删除菜品」，删除仍走二次确认（`docs/design/0023` 第 2.1 节）。
+    dishMenu?.let { target ->
+        Popup(
+            alignment = Alignment.TopStart,
+            offset = target.position,
+            onDismissRequest = { dishMenu = null }
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                tonalElevation = 3.dp,
+                shadowElevation = 6.dp
+            ) {
+                TextButton(
+                    onClick = {
+                        dishMenu = null
+                        deletingDish = target.dish
+                    }
+                ) {
+                    Text(stringResource(R.string.client_dish_delete))
                 }
             }
         }
@@ -504,12 +551,24 @@ private fun ClientDishRow(
     onSell: () -> Unit,
     onUnsell: () -> Unit,
     onSoldOutChange: (Boolean) -> Unit,
-    onRequestDelete: () -> Unit
+    /** 整行在窗口中的位置（长按菜单定位用）。 */
+    onPositioned: (Offset) -> Unit,
+    /** 长按整行：弹出操作菜单（删除入口放在这里，见 `docs/design/0023` 第 2.1 节）。 */
+    onLongPress: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(enabled = adminMode && canEdit && !busy, onClick = onEdit)
+            // 记录整行在窗口中的位置，长按菜单才能贴着这一行弹出。
+            .onGloballyPositioned { coordinates ->
+                val position = coordinates.positionInWindow()
+                onPositioned(Offset(position.x.toFloat(), position.y.toFloat()))
+            }
+            .combinedClickable(
+                enabled = adminMode && canEdit && !busy,
+                onClick = onEdit,
+                onLongClick = onLongPress
+            )
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -560,10 +619,6 @@ private fun ClientDishRow(
                                 if (dish.soldOut) R.string.admin_restore else R.string.admin_sold_out_action
                             )
                         )
-                    }
-                    // 行内显式删除：不再要求先进编辑弹窗（`docs/design/0023` 第 2.1 节）。
-                    TextButton(onClick = onRequestDelete, enabled = canEdit) {
-                        Text(stringResource(R.string.admin_delete))
                     }
                 }
             }

@@ -214,4 +214,5 @@
     <string name="client_display_show_stock">显示有货 / 已售完提示</string>
     <string name="client_display_saved">展示设置已同步到平板</string>
     <string name="client_display_upload_failed">背景图上传失败，请重试（需与平板同一 Wi-Fi）</string>
+    <string name="client_dish_delete">删除菜品</string>
 </resources>
