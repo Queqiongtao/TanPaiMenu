@@ -217,13 +217,17 @@ class MenuRepository(
         }
     }
 
+    /**
+     * 撤销该菜品最后一条卖出记录。
+     *
+     * 不按设备归属限制：手机与平板可互相撤销（`docs/design/0020` 第 2.5 节）。
+     * [deviceId] 保留在签名中，继续作为卖出流水的归属信息。
+     */
     suspend fun unsell(dishId: Long, deviceId: String): SellResult = mutate {
         val dish = dishDao.getById(dishId)
             ?: return@mutate SellResult.Failure(SellError.NotFound) to null
-        val record = UnsellPolicy.pickLastRevocable(
-            saleRecordDao.getActiveFor(dishId, deviceId),
-            deviceId
-        ) ?: return@mutate SellResult.Failure(SellError.NoRevocableRecord) to null
+        val record = UnsellPolicy.pickLastRevocable(saleRecordDao.getActiveFor(dishId))
+            ?: return@mutate SellResult.Failure(SellError.NoRevocableRecord) to null
         saleRecordDao.markRevoked(record.id)
         val updated = UnsellPolicy.applyUnsell(dish, now())
         dishDao.update(updated)

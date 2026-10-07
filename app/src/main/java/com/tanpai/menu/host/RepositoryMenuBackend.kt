@@ -27,13 +27,17 @@ class RepositoryMenuBackend(
     private val repository: MenuRepository,
     private val imageStore: ImageStore,
     private val deviceDao: DeviceDao,
+    private val storeName: () -> String,
+    private val clientEditsEnabled: () -> Boolean,
     private val now: () -> Long = System::currentTimeMillis
 ) : MenuBackend {
 
     override suspend fun state(): StateDto = StateDto(
         version = repository.currentVersion(),
         categories = repository.enabledCategories().map { it.toDto() },
-        dishes = repository.enabledDishes().map { it.toDto() }
+        dishes = repository.enabledDishes().map { it.toDto() },
+        storeName = storeName(),
+        clientEditsEnabled = clientEditsEnabled()
     )
 
     override suspend fun categories(): List<CategoryDto> =
@@ -146,6 +150,10 @@ class RepositoryMenuBackend(
     }
 
     override suspend fun currentVersion(): Long = repository.currentVersion()
+
+    override suspend fun resetMenu() {
+        repository.resetToSeedMenu()
+    }
 
     /** 设备注册表写入：WS 连接建立时登记 / 刷新。 */
     suspend fun upsertDevice(id: String, name: String, role: String) {

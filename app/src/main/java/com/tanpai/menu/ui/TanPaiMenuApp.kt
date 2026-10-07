@@ -28,11 +28,11 @@ import com.tanpai.menu.data.SettingsStore
 import com.tanpai.menu.host.HostStatusProvider
 import com.tanpai.menu.imaging.ImageStore
 import com.tanpai.menu.ui.admin.AdminScreen
-import com.tanpai.menu.ui.admin.ConfirmDialog
 import com.tanpai.menu.ui.admin.HoldToTriggerButton
 import com.tanpai.menu.ui.admin.AdminViewModel
 import com.tanpai.menu.ui.display.DisplayScreen
 import com.tanpai.menu.ui.display.DisplayViewModel
+import com.tanpai.menu.ui.dialogs.ConfirmDialog
 import kotlinx.coroutines.delay
 
 private const val SCREEN_DISPLAY = "display"

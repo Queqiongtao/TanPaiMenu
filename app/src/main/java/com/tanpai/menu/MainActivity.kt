@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
                             session = container.clientSession,
                             pairingClient = container.pairingClient,
                             settings = container.settingsStore,
+                            onCreateCaptureUri = { container.imageStore.newCaptureUri() },
                             onSwitchToHost = { switchRole(Role.HOST) }
                         )
                     }

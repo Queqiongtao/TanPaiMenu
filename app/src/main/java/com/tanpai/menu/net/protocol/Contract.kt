@@ -30,6 +30,7 @@ object EventType {
 object ErrorCode {
     const val INVALID_ARGUMENT = "invalid_argument"
     const val UNAUTHORIZED = "unauthorized"
+    const val FORBIDDEN = "forbidden"
     const val NOT_FOUND = "not_found"
     const val CONFLICT = "conflict"
     const val PAYLOAD_TOO_LARGE = "payload_too_large"
@@ -73,7 +74,11 @@ data class DishDto(
 data class StateDto(
     val version: Long,
     val categories: List<CategoryDto> = emptyList(),
-    val dishes: List<DishDto> = emptyList()
+    val dishes: List<DishDto> = emptyList(),
+    /** 店名；空串或 null 表示未设置，客户端回退到默认文案。 */
+    val storeName: String? = null,
+    /** 主机是否允许手机编辑（`docs/design/0020` 第 2.3 节）；老客户端忽略该字段。 */
+    val clientEditsEnabled: Boolean = true
 )
 
 /** GET /devices 列表项。 */

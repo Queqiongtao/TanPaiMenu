@@ -64,6 +64,26 @@ class HostApiTest {
     }
 
     @Test
+    fun stateCarriesStoreNameAndClientEditsFlag() = runTest {
+        val response = api().handle(request("GET", "/state"))
+
+        assertEquals(200, response.status)
+        val state = ProtocolJson.decodeFromString(StateDto.serializer(), response.bodyText)
+        assertEquals("大金馄饨", state.storeName)
+        assertEquals(false, state.clientEditsEnabled)
+    }
+
+    @Test
+    fun resetMenuReturnsNoContent() = runTest {
+        val backend = FakeBackend()
+
+        val response = api(backend).handle(request("POST", "/menu/reset"))
+
+        assertEquals(204, response.status)
+        assertEquals(0, response.body.size)
+    }
+
+    @Test
     fun repeatedRequestIdReplaysWithoutReExecuting() = runTest {
         val backend = FakeBackend()
         val pipeline = api(backend)
@@ -247,7 +267,10 @@ class HostApiTest {
     }
 
     /** 内存替身：只实现管线断言所需的语义，真实写入由 `RepositoryMenuBackend` 覆盖。 */
-    private class FakeBackend : MenuBackend {
+    private class FakeBackend(
+        private val storeName: String? = "大金馄饨",
+        private val clientEdits: Boolean = false
+    ) : MenuBackend {
 
         private val categories = mutableListOf(
             CategoryDto(1, "热菜", 1, true, STAMP),
@@ -267,7 +290,9 @@ class HostApiTest {
         override suspend fun state(): StateDto = StateDto(
             version = 7,
             categories = categories.filter { it.enabled },
-            dishes = dishes.filter { it.enabled }
+            dishes = dishes.filter { it.enabled },
+            storeName = storeName,
+            clientEditsEnabled = clientEdits
         )
 
         override suspend fun categories(): List<CategoryDto> = categories.filter { it.enabled }
@@ -357,6 +382,13 @@ class HostApiTest {
             } else {
                 null
             }
+
+        override suspend fun resetMenu() {
+            categories.clear()
+            categories += CategoryDto(1, "热菜", 1, true, STAMP)
+            dishes.clear()
+            dishes += DishDto(10, 1, "烤串", 300, "串", null, true, 5, false, "", 1, true, STAMP)
+        }
     }
 
     private companion object {

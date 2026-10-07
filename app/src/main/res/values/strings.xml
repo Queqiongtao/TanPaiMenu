@@ -118,6 +118,8 @@
     <string name="settings_host_device_role_tablet">平板</string>
     <string name="settings_host_connected_just_now">刚刚连接</string>
     <string name="settings_host_connected_minutes">已连接 %1$d 分钟</string>
+    <string name="settings_client_edits">允许手机编辑</string>
+    <string name="settings_client_edits_hint">关闭后手机只能查看菜单，写操作会被平板拒绝（防误操作，不是安全边界）。</string>
     <string name="host_notification_channel">手机控制端</string>
     <string name="host_notification_channel_desc">保持手机控制端在后台可连接</string>
     <string name="host_notification_running">手机控制端运行中 · %1$s</string>
@@ -160,7 +162,10 @@
     <string name="client_settings_host">主机地址：%1$s</string>
     <string name="client_settings_no_host">未设置</string>
     <string name="client_settings_state">连接状态：%1$s</string>
-    <string name="client_settings_read_only_hint">当前为只读浏览，编辑功能将在后续版本提供。</string>
+    <string name="client_settings_read_only_hint">在线时可点顶部「管理」编辑菜单；断线时自动转为只读。</string>
+    <string name="client_settings_edits">编辑权限：%1$s</string>
+    <string name="client_edits_allowed">允许</string>
+    <string name="client_edits_denied">已关闭</string>
     <string name="client_reconnect">重新连接</string>
     <string name="client_repair">重新配对</string>
     <string name="client_confirm">确定</string>
@@ -169,4 +174,19 @@
     <string name="client_state_reconnecting">正在重连</string>
     <string name="client_state_unauthorized">配对失效</string>
     <string name="client_state_disconnected">未连接</string>
+
+    <string name="client_admin_enter">管理</string>
+    <string name="client_admin_exit">完成</string>
+    <string name="client_admin_more">⋯ 更多</string>
+    <string name="client_admin_add_category">＋ 新增分类</string>
+    <string name="client_admin_add_dish">＋ 新增菜品</string>
+    <string name="client_admin_category_edit">重命名 / 改排序</string>
+    <string name="client_admin_category_delete">删除分类</string>
+    <string name="client_admin_edit_dish">编辑菜品</string>
+    <string name="client_submitting">提交中…</string>
+    <string name="client_submit_failed">提交失败：%1$s</string>
+    <string name="client_edit_disabled">平板已关闭手机编辑</string>
+    <string name="client_edit_disabled_hint">请在平板「设置 → 手机控制端」中打开「允许手机编辑」</string>
+    <string name="client_image_upload_failed">图片上传失败，请重试或稍后再试</string>
+    <string name="client_retry">重试</string>
 </resources>

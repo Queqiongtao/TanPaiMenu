@@ -149,6 +149,9 @@ class HostApi(
             seg.size == 2 && seg[0] == "images" && method == "GET" ->
                 readImage(seg[1])
 
+            seg.size == 2 && seg[0] == "menu" && seg[1] == "reset" && method == "POST" ->
+                resetMenu()
+
             seg.size == 1 && seg[0] == "devices" && method == "GET" ->
                 json(200, encodeJson(backend.devices()))
 
@@ -269,6 +272,16 @@ class HostApi(
         if (!IMAGE_NAME.matches(name)) return notFound()
         val payload = backend.readImage(name) ?: return notFound()
         return HostResponse.bytes(200, payload.contentType, payload.bytes)
+    }
+
+    /**
+     * `POST /menu/reset`：恢复默认菜单（`docs/design/0020` 第 2.6 节）。
+     *
+     * 仓储会发出 `FullReload`，传输层据此广播 `snapshot`，因此这里只需返回 204。
+     */
+    private suspend fun resetMenu(): HostResponse {
+        backend.resetMenu()
+        return HostResponse.empty(204)
     }
 
     private fun validateDishFields(

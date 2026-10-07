@@ -33,12 +33,22 @@ class ClientMirror {
     var version: Long = 0L
         private set
 
+    /** 快照下发的店名；null 表示主机未设置（`docs/design/0020` 第 3 节）。 */
+    var storeName: String? = null
+        private set
+
+    /** 快照下发的「允许手机编辑」开关；由 `/state` 与 `snapshot` 帧刷新。 */
+    var clientEditsEnabled: Boolean = true
+        private set
+
     fun applySnapshot(state: StateDto) {
         categories.clear()
         dishes.clear()
         state.categories.forEach { categories[it.id] = it }
         state.dishes.forEach { dishes[it.id] = it }
         version = state.version
+        storeName = state.storeName?.takeIf { it.isNotBlank() }
+        clientEditsEnabled = state.clientEditsEnabled
     }
 
     fun applyEvent(event: WireEvent): EventApplyResult {
@@ -96,5 +106,7 @@ class ClientMirror {
         categories.clear()
         dishes.clear()
         version = 0L
+        storeName = null
+        clientEditsEnabled = true
     }
 }

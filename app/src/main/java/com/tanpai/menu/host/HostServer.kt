@@ -34,6 +34,7 @@ class HostServer private constructor(
     private val backend: RepositoryMenuBackend,
     private val repository: MenuRepository,
     private val tokenProvider: () -> String,
+    private val clientEditsAllowed: () -> Boolean,
     private val scope: CoroutineScope,
     private val logInfo: (String) -> Unit,
     private val logError: (String, Throwable?) -> Unit,
@@ -118,7 +119,13 @@ class HostServer private constructor(
         }
         val path = uri.removePrefix(API_PREFIX).ifBlank { "/" }
         return try {
-            if (path.trimEnd('/') == IMAGES_PATH && session.method == NanoHTTPD.Method.POST) {
+            if (isClientWriteForbidden(session, path)) {
+                // 拒绝发生在读取请求体之前，必须先把字节从连接里读掉：
+                // 否则客户端复用同一条 keep-alive 连接时，残留报文会被解析成脏请求行（400 语法错误），
+                // 表现为「一次 403 之后该连接上的后续请求全部失败」。
+                readRawBody(session)
+                toResponse(jsonError(403, ErrorCode.FORBIDDEN, "平板已关闭手机编辑"))
+            } else if (path.trimEnd('/') == IMAGES_PATH && session.method == NanoHTTPD.Method.POST) {
                 handleImageUpload(session)
             } else if (path.trimEnd('/') == PAIR_PATH && session.method == NanoHTTPD.Method.POST) {
                 handlePairing(session)
@@ -232,6 +239,20 @@ class HostServer private constructor(
         if (sent > 0) logInfo("已广播 ${event.type}（版本 ${event.version}）给 $sent 个连接")
     }
 
+    /**
+     * 立即向所有连接广播一次全量快照。
+     *
+     * 用于「允许手机编辑」开关这类不改变菜单数据的设置项：手机端据此即时刷新可编辑态
+     * （`docs/design/0020` 第 2.3 节）。服务未启动时调用无副作用。
+     */
+    fun broadcastStateNow() {
+        scope.launch {
+            val event = hub.snapshotEvent(backend.state())
+            val sent = hub.broadcast(event)
+            if (sent > 0) logInfo("已广播 ${event.type}（版本 ${event.version}）给 $sent 个连接")
+        }
+    }
+
     /** 当前在线设备快照（按连接时间升序，docs/design/0016 第 2.4 节）。 */
     fun onlineDevices(): List<OnlineDevice> = hub.connections().map { connection ->
         OnlineDevice(
@@ -258,6 +279,19 @@ class HostServer private constructor(
 
     private fun jsonError(status: Int, code: String, message: String): HostResponse =
         HostResponse.json(status, """{"error":{"code":"$code","message":"$message"}}""")
+
+    /**
+     * 手机写请求的角色判定（`docs/design/0020` 第 2.3 节）：
+     * 写方法 + `X-Device-Role: client` + 平板已关闭手机编辑 → 拒绝。GET 与 `/pair` 不受限。
+     *
+     * 请求头由客户端自报，属「防误操作」的软约束，不是安全边界。
+     */
+    private fun isClientWriteForbidden(session: IHTTPSession, path: String): Boolean {
+        if (session.method !in WRITE_METHODS) return false
+        if (path.trimEnd('/') == PAIR_PATH) return false
+        val headers = session.headers ?: return false
+        return headers[ROLE_HEADER] == DeviceRole.CLIENT && !clientEditsAllowed()
+    }
 
     /**
      * 单个 WS 连接：鉴权失败立即以 4401 关闭；成功则登记设备、发首帧快照并广播上下线。
@@ -359,6 +393,17 @@ class HostServer private constructor(
         /** 配对接口路径（去掉 `/api/v1` 前缀后）。 */
         private const val PAIR_PATH = "/pair"
 
+        /** 客户端自报角色的请求头（小写，NanoHTTPD 会统一转小写）。 */
+        private const val ROLE_HEADER = "x-device-role"
+
+        /** 受「允许手机编辑」开关约束的写方法（`docs/design/0020` 第 2.3 节）。 */
+        private val WRITE_METHODS = setOf(
+            NanoHTTPD.Method.POST,
+            NanoHTTPD.Method.PATCH,
+            NanoHTTPD.Method.PUT,
+            NanoHTTPD.Method.DELETE
+        )
+
         /** 连接空闲读超时（毫秒）。 */
         /**
          * 连接读超时；同时是「无 pong 响应多久判定掉线」的上限。
@@ -394,6 +439,7 @@ class HostServer private constructor(
             backend: RepositoryMenuBackend,
             repository: MenuRepository,
             tokenProvider: () -> String,
+            clientEditsAllowed: () -> Boolean,
             scope: CoroutineScope,
             logInfo: (String) -> Unit,
             logError: (String, Throwable?) -> Unit,
@@ -405,6 +451,7 @@ class HostServer private constructor(
                     backend = backend,
                     repository = repository,
                     tokenProvider = tokenProvider,
+                    clientEditsAllowed = clientEditsAllowed,
                     scope = scope,
                     logInfo = logInfo,
                     logError = logError,

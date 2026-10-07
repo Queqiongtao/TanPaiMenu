@@ -61,6 +61,10 @@ class AdminViewModel(
     var hostEnabled by mutableStateOf(settings.hostEnabled)
         private set
 
+    /** 是否允许手机编辑菜单（`docs/design/0020` 第 2.3 节）；由 HostStatusProvider 读写。 */
+    var clientEditsEnabled by mutableStateOf(settings.clientEditsEnabled)
+        private set
+
     /** 当前在线设备（只显示在线，见 `docs/design/0016` 第 2.4 节）。 */
     var onlineDevices by mutableStateOf<List<OnlineDevice>>(emptyList())
         private set
@@ -134,6 +138,7 @@ class AdminViewModel(
     /** 刷新主机运行状态、配对信息与在线设备（设置弹窗打开时每 2 秒调用）。 */
     fun refreshHostInfo() {
         hostEnabled = hostStatus.hostEnabled
+        clientEditsEnabled = hostStatus.clientEditsEnabled
         hostRunning = hostStatus.running
         hostAddress = hostStatus.address()
         pairToken = hostStatus.pairToken
@@ -147,6 +152,12 @@ class AdminViewModel(
         hostEnabled = hostStatus.setHostEnabled(enabled)
         TpLog.i(TAG, if (enabled) "已启用手机控制端" else "已关闭手机控制端")
         refreshHostInfo()
+    }
+
+    /** 打开 / 关闭手机编辑：落盘并广播快照，让在线手机即时刷新可编辑态。 */
+    fun applyClientEditsEnabled(enabled: Boolean) {
+        clientEditsEnabled = hostStatus.setClientEditsEnabled(enabled)
+        TpLog.i(TAG, if (enabled) "已允许手机编辑" else "已禁止手机编辑")
     }
 
     /** 更换长期令牌并断开现有客户端连接；二维码随之更新。 */

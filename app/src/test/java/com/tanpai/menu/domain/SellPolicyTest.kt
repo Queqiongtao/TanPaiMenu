@@ -75,26 +75,22 @@ class UnsellPolicyTest {
         SaleRecord(id = id, dishId = 1L, createdAt = 0L, deviceId = deviceId, revoked = revoked)
 
     @Test
-    fun picksLatestActiveRecordForDevice() {
-        val picked = UnsellPolicy.pickLastRevocable(
-            listOf(record(1L), record(3L), record(2L)),
-            deviceId = "A"
-        )
+    fun picksLatestActiveRecord() {
+        val picked = UnsellPolicy.pickLastRevocable(listOf(record(1L), record(3L), record(2L)))
         assertEquals(3L, picked?.id)
     }
 
     @Test
-    fun ignoresOtherDevicesAndRevoked() {
+    fun ignoresRevokedAndAllowsCrossDeviceRevoke() {
         val picked = UnsellPolicy.pickLastRevocable(
-            listOf(record(1L), record(5L, deviceId = "B"), record(9L, revoked = true)),
-            deviceId = "A"
+            listOf(record(1L), record(5L, deviceId = "B"), record(9L, revoked = true))
         )
-        assertEquals(1L, picked?.id)
+        assertEquals(5L, picked?.id)
     }
 
     @Test
     fun returnsNullWhenNothingToRevoke() {
-        assertNull(UnsellPolicy.pickLastRevocable(emptyList(), deviceId = "A"))
+        assertNull(UnsellPolicy.pickLastRevocable(emptyList()))
     }
 
     @Test

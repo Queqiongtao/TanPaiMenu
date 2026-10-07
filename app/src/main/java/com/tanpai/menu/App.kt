@@ -45,7 +45,9 @@ class AppContainer(context: Context) {
     val menuBackend: RepositoryMenuBackend = RepositoryMenuBackend(
         repository = menuRepository,
         imageStore = imageStore,
-        deviceDao = database.deviceDao()
+        deviceDao = database.deviceDao(),
+        storeName = { settingsStore.displayStoreName },
+        clientEditsEnabled = { settingsStore.clientEditsEnabled }
     )
 
     val hostApi: HostApi = HostApi(
@@ -176,6 +178,7 @@ class App : Application(), ImageLoaderFactory {
             backend = container.menuBackend,
             repository = container.menuRepository,
             tokenProvider = { container.settingsStore.pairToken },
+            clientEditsAllowed = { container.settingsStore.clientEditsEnabled },
             scope = appScope,
             logInfo = { message -> TpLog.i("host", message) },
             logError = { message, throwable -> TpLog.e("host", message, throwable) },

@@ -39,6 +39,19 @@ class HostStatusProvider(
     /** 是否启用手机控制端（持久化在 SettingsStore.hostEnabled）。 */
     val hostEnabled: Boolean get() = settings.hostEnabled
 
+    /** 是否允许手机编辑菜单（持久化在 SettingsStore.clientEditsEnabled）。 */
+    val clientEditsEnabled: Boolean get() = settings.clientEditsEnabled
+
+    /**
+     * 打开 / 关闭手机编辑：落盘并广播一次快照，让在线手机即时刷新可编辑态
+     * （`docs/design/0020` 第 2.3 节）；服务未启动时只落盘。
+     */
+    fun setClientEditsEnabled(enabled: Boolean): Boolean {
+        settings.clientEditsEnabled = enabled
+        server()?.broadcastStateNow()
+        return enabled
+    }
+
     /**
      * 打开 / 关闭手机控制端：立即启停前台服务（docs/design/0016 第 2.2 节），返回新状态。
      *

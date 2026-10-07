@@ -30,8 +30,14 @@ object SellPolicy {
 
 object UnsellPolicy {
 
-    fun pickLastRevocable(records: List<SaleRecord>, deviceId: String): SaleRecord? =
-        records.filter { it.deviceId == deviceId && !it.revoked }.maxByOrNull { it.id }
+    /**
+     * 取最后一条可撤销的卖出记录（全局，不限设备）。
+     *
+     * `docs/design/0020` 第 2.5 节：撤销不再按 deviceId 归属，手机与平板可互相撤销；
+     * [records] 由 `SaleRecordDao.getActiveFor` 提供，已过滤掉已撤销记录。
+     */
+    fun pickLastRevocable(records: List<SaleRecord>): SaleRecord? =
+        records.filter { !it.revoked }.maxByOrNull { it.id }
 
     fun applyUnsell(dish: Dish, now: Long): Dish =
         dish.copy(stockCount = dish.stockCount + 1, soldOut = false, updatedAt = now)

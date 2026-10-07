@@ -72,6 +72,9 @@ import com.tanpai.menu.data.db.Dish
 import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.domain.SellError
 import com.tanpai.menu.domain.SellResult
+import com.tanpai.menu.ui.dialogs.CategoryEditDialog
+import com.tanpai.menu.ui.dialogs.ConfirmDialog
+import com.tanpai.menu.ui.dialogs.DishEditDialog
 import com.tanpai.menu.host.OnlineDevice
 import com.tanpai.menu.host.PairCodeStatus
 import com.tanpai.menu.net.protocol.DeviceRole
@@ -366,6 +369,7 @@ fun AdminScreen(
             backgroundScrimPercent = viewModel.backgroundScrimPercent,
             wechatQrImagePath = viewModel.wechatQrImagePath,
             hostEnabled = viewModel.hostEnabled,
+            clientEditsEnabled = viewModel.clientEditsEnabled,
             onlineDevices = viewModel.onlineDevices,
             hostRunning = viewModel.hostRunning,
             hostAddress = viewModel.hostAddress,
@@ -387,6 +391,7 @@ fun AdminScreen(
             onGeneratePairCode = { viewModel.generatePairCode() },
             onSwitchToClient = onSwitchToClient,
             onHostEnabledChange = { viewModel.applyHostEnabled(it) },
+            onClientEditsEnabledChange = { viewModel.applyClientEditsEnabled(it) },
             onChangePin = {
                 showSettings = false
                 showPinChange = true
@@ -418,6 +423,7 @@ private fun SettingsDialog(
     backgroundScrimPercent: Int,
     wechatQrImagePath: String?,
     hostEnabled: Boolean,
+    clientEditsEnabled: Boolean,
     onlineDevices: List<OnlineDevice>,
     hostRunning: Boolean,
     hostAddress: String?,
@@ -439,6 +445,7 @@ private fun SettingsDialog(
     onGeneratePairCode: () -> Unit,
     onSwitchToClient: () -> Unit,
     onHostEnabledChange: (Boolean) -> Unit,
+    onClientEditsEnabledChange: (Boolean) -> Unit,
     onChangePin: () -> Unit,
     onDisablePin: () -> Unit,
     resetDone: Boolean,
@@ -776,6 +783,27 @@ private fun SettingsDialog(
                         modifier = Modifier.weight(1f)
                     )
                     Switch(checked = hostEnabled, onCheckedChange = onHostEnabledChange)
+                }
+                if (hostEnabled) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_client_edits),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = clientEditsEnabled,
+                            onCheckedChange = onClientEditsEnabledChange
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.settings_client_edits_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 if (!hostEnabled) {
                     Text(

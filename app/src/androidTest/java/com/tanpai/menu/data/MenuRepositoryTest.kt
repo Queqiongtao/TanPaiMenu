@@ -98,7 +98,7 @@ class MenuRepositoryTest {
         val result = repository.sell(id, deviceId = "A")
         assertTrue(result is SellResult.Success)
         assertEquals(2, db.dishDao().getById(id)?.stockCount)
-        assertEquals(1, db.saleRecordDao().getActiveFor(id, "A").size)
+        assertEquals(1, db.saleRecordDao().getActiveFor(id).size)
     }
 
     @Test
@@ -125,6 +125,22 @@ class MenuRepositoryTest {
         val id = newDishInNewCategory()
         val result = repository.unsell(id, deviceId = "A")
         assertEquals(SellResult.Failure(SellError.NoRevocableRecord), result)
+    }
+
+    @Test
+    fun unsellRevokesLastSaleFromAnotherDevice() = runTest {
+        val id = newDishInNewCategory(stockCount = 5)
+        repository.sell(id, deviceId = "A")
+        repository.sell(id, deviceId = "B")
+
+        val result = repository.unsell(id, deviceId = "A")
+
+        assertTrue(result is SellResult.Success)
+        assertEquals(4, db.dishDao().getById(id)?.stockCount)
+        // 撤销取全局最后一条：B 的那一单被撤掉，A 的更早记录仍为有效。
+        val active = db.saleRecordDao().getActiveFor(id)
+        assertEquals(1, active.size)
+        assertEquals("A", active.single().deviceId)
     }
 
     @Test

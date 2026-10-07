@@ -110,6 +110,15 @@ class SettingsStore(context: Context) : PairCodeStore {
         get() = prefs.getBoolean(KEY_HOST_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_HOST_ENABLED, value).apply()
 
+    /**
+     * 是否允许手机编辑菜单（`docs/design/0020` 第 2.3 节）。
+     *
+     * 关闭后主机拒绝带 `X-Device-Role: client` 的写请求；这是防误操作的软约束，不是安全边界。
+     */
+    var clientEditsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CLIENT_EDITS_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_CLIENT_EDITS_ENABLED, value).apply()
+
     /** 重新生成配对码并落盘，返回新码；调用方负责断开现有连接。 */
     fun regeneratePairToken(): String = generatePairToken().also { pairToken = it }
 
@@ -210,6 +219,7 @@ class SettingsStore(context: Context) : PairCodeStore {
         const val KEY_PAIR_TOKEN = "pair_token"
         const val KEY_SERVER_PORT = "server_port"
         const val KEY_HOST_ENABLED = "host_enabled"
+        const val KEY_CLIENT_EDITS_ENABLED = "client_edits_enabled"
         const val KEY_ROLE = "role"
         const val KEY_CLIENT_HOST = "client_host"
         const val KEY_CLIENT_TOKEN = "client_token"

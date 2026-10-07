@@ -53,6 +53,9 @@ class HostServerTest {
     private lateinit var server: HostServer
     private var categoryId = 0L
 
+    /** 「允许手机编辑」开关；测试里按需切换，同时驱动 `/state` 的同名字段。 */
+    private var clientEditsAllowed = true
+
     @Before
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
@@ -65,6 +68,8 @@ class HostServerTest {
             repository = repository,
             imageStore = imageStore,
             deviceDao = db.deviceDao(),
+            storeName = { STORE_NAME },
+            clientEditsEnabled = { clientEditsAllowed },
             now = { 2000L }
         )
         server = requireNotNull(
@@ -73,6 +78,7 @@ class HostServerTest {
                 backend = backend,
                 repository = repository,
                 tokenProvider = { token },
+                clientEditsAllowed = { clientEditsAllowed },
                 scope = scope,
                 logInfo = { },
                 logError = { _, _ -> },
@@ -233,13 +239,62 @@ class HostServerTest {
         }
     }
 
+    @Test
+    fun clientWriteIsForbiddenWhenEditsDisabled() {
+        clientEditsAllowed = false
+        val dishId = runBlocking { repository.enabledDishes() }.first().id
+        val asClient = mapOf("X-Device-Role" to "client")
+
+        // 只读接口不受开关影响：手机仍能拉快照与浏览。
+        val (stateStatus, _) = http("GET", "/api/v1/state", headers = asClient)
+        assertEquals(200, stateStatus)
+
+        val (forbiddenStatus, forbiddenBody) =
+            http("PATCH", "/api/v1/dishes/$dishId", """{"name":"烤羊肉"}""", headers = asClient)
+        assertEquals(403, forbiddenStatus)
+        assertTrue(forbiddenBody.contains("forbidden"))
+
+        // 平板自己（host）不受该开关限制。
+        val (hostStatus, hostBody) = http(
+            "PATCH",
+            "/api/v1/dishes/$dishId",
+            """{"name":"烤羊肉"}""",
+            headers = mapOf("X-Device-Role" to "host")
+        )
+        assertEquals(hostBody, 200, hostStatus)
+    }
+
+    @Test
+    fun resetMenuReturnsNoContentAndBroadcastsSnapshot() {
+        WsClient(
+            "127.0.0.1",
+            server.port,
+            "/ws?token=$token&deviceId=phone-reset&name=${urlEncode("测试机")}&role=client"
+        ).use { client ->
+            client.connect()
+            val initial = ProtocolJson.decodeFromString(WireEvent.serializer(), client.readTextFrame())
+            assertEquals(EventType.SNAPSHOT, initial.type)
+
+            val (status, body) = http("POST", "/api/v1/menu/reset")
+            assertEquals(204, status)
+            assertTrue(body.isEmpty())
+
+            // 仓储发出 FullReload，传输层按既有规则改广播 snapshot，两端据此重新对齐。
+            val reloaded = ProtocolJson.decodeFromString(WireEvent.serializer(), client.readTextFrame())
+            assertEquals(EventType.SNAPSHOT, reloaded.type)
+            val state = ProtocolJson.decodeFromString(StateDto.serializer(), reloaded.payload.toString())
+            assertEquals(12, state.dishes.size)
+        }
+    }
+
     private fun http(
         method: String,
         path: String,
         body: String? = null,
-        bearer: String? = token
+        bearer: String? = token,
+        headers: Map<String, String> = emptyMap()
     ): Pair<Int, String> {
-        val connection = open(method, path, bearer)
+        val connection = open(method, path, bearer, headers)
         return try {
             if (body != null) {
                 connection.doOutput = true
@@ -287,12 +342,18 @@ class HostServerTest {
         }
     }
 
-    private fun open(method: String, path: String, bearer: String?): HttpURLConnection {
+    private fun open(
+        method: String,
+        path: String,
+        bearer: String?,
+        headers: Map<String, String> = emptyMap()
+    ): HttpURLConnection {
         val connection = URL("http://127.0.0.1:${server.port}$path").openConnection() as HttpURLConnection
         connection.requestMethod = method
         connection.connectTimeout = TIMEOUT_MS
         connection.readTimeout = TIMEOUT_MS
         bearer?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
+        headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
         return connection
     }
 
@@ -388,6 +449,7 @@ class HostServerTest {
     private companion object {
         const val TEST_PORT = 18080
         const val TIMEOUT_MS = 5_000
+        const val STORE_NAME = "大金馄饨"
         const val OPCODE_TEXT = 0x1
         const val OPCODE_PING = 0x9
         const val OPCODE_PONG = 0xA

@@ -42,6 +42,26 @@ fun ClientSettingsDialog(
                     ),
                     style = MaterialTheme.typography.bodyMedium
                 )
+                Text(
+                    text = stringResource(
+                        R.string.client_settings_edits,
+                        stringResource(
+                            if (state.clientEditsEnabled) {
+                                R.string.client_edits_allowed
+                            } else {
+                                R.string.client_edits_denied
+                            }
+                        )
+                    ),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (!state.clientEditsEnabled) {
+                    Text(
+                        text = stringResource(R.string.client_edit_disabled_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 state.error?.let { message ->
                     Text(
                         text = message,

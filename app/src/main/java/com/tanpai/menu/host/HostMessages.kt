@@ -100,4 +100,11 @@ interface MenuBackend {
 
     /** 读取图片字节；文件不存在返回 null。 */
     suspend fun readImage(name: String): ImagePayload?
+
+    /**
+     * 清空菜单与图片并写回默认菜单（`docs/design/0020` 第 2.6 节）。
+     *
+     * 由仓储发出 `FullReload`，传输层按既有规则改广播 `snapshot`，两端重新对齐。
+     */
+    suspend fun resetMenu()
 }
