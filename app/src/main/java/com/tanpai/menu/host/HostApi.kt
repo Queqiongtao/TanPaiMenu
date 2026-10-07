@@ -1,5 +1,6 @@
 package com.tanpai.menu.host
 
+import com.tanpai.menu.data.db.DishHighlight
 import com.tanpai.menu.net.protocol.CategoryCreateRequest
 import com.tanpai.menu.net.protocol.CategoryPatchRequest
 import com.tanpai.menu.net.protocol.DishCreateRequest
@@ -231,6 +232,11 @@ class HostApi(
         body.description?.let { if (it.length > MAX_DESCRIPTION_LENGTH) {
             return failure(400, ErrorCode.INVALID_ARGUMENT, "描述最多 $MAX_DESCRIPTION_LENGTH 字")
         } }
+        body.highlight?.let { raw ->
+            if (raw.isNotEmpty() && DishHighlight.fromWire(raw) == null) {
+                return failure(400, ErrorCode.INVALID_ARGUMENT, "菜品标签无效")
+            }
+        }
         return idempotent(body.requestId) {
             when (val result = backend.patchDish(id, body)) {
                 is WriteResult.Ok -> json(200, encodeJson(result.value))

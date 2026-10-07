@@ -79,6 +79,7 @@ fun TanPaiMenuApp(
             viewModel = displayViewModel,
             storeName = settings.displayStoreName,
             showStockHint = settings.showStockHint,
+            autoScrollEnabled = settings.autoScrollEnabled,
             cardAlpha = settings.cardAlphaPercent / 100f,
             backgroundImagePath = settings.backgroundImagePath,
             backgroundStyleId = settings.backgroundStyleId,

@@ -78,6 +78,9 @@ class AdminViewModel(
     var showStockHint by mutableStateOf(settings.showStockHint)
         private set
 
+    var autoScrollEnabled by mutableStateOf(settings.autoScrollEnabled)
+        private set
+
     var cardAlphaPercent by mutableStateOf(settings.cardAlphaPercent)
         private set
 
@@ -123,6 +126,11 @@ class AdminViewModel(
     fun updateShowStockHint(value: Boolean) {
         showStockHint = value
         settings.showStockHint = value
+    }
+
+    fun updateAutoScrollEnabled(value: Boolean) {
+        autoScrollEnabled = value
+        settings.autoScrollEnabled = value
     }
 
     fun updateCardAlphaPercent(value: Int) {

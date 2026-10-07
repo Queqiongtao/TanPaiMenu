@@ -3,6 +3,7 @@ package com.tanpai.menu.data
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import com.tanpai.menu.data.db.DishHighlight
 import org.junit.Test
 
 class SeedMenuTest {
@@ -47,6 +48,15 @@ class SeedMenuTest {
             SeedMenu.categories.single().dishes.map { it.name },
             SeedMenu.imageAssetByName.keys.toList()
         )
+    }
+
+    @Test
+    fun seedDishesKeepPlainRecommendedAndNewLabels() {
+        val highlights = SeedMenu.categories.single().dishes.associate { it.name to it.highlight }
+
+        assertEquals(DishHighlight.Recommended, highlights["虾仁鲜肉"])
+        assertEquals(DishHighlight.New, highlights["芝士玉米鲜肉"])
+        assertEquals(2, highlights.values.count { it != null })
     }
 
     @Test

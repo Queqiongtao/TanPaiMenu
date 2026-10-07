@@ -1,6 +1,7 @@
 package com.tanpai.menu.client
 
 import com.tanpai.menu.data.db.Dish
+import com.tanpai.menu.data.db.DishHighlight
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -17,7 +18,8 @@ class ClientCommandTest {
     private fun draft(
         name: String = " 韭菜馄饨 ",
         priceCents: Int = 1000,
-        imagePath: String? = "images/a.jpg"
+        imagePath: String? = "images/a.jpg",
+        highlight: DishHighlight? = DishHighlight.Recommended
     ) = DishDraft(
         name = name,
         priceCents = priceCents,
@@ -25,6 +27,7 @@ class ClientCommandTest {
         imagePath = imagePath,
         stockEnabled = true,
         stockCount = 3,
+        highlight = highlight,
         description = "现包",
         sortOrder = 2
     )
@@ -58,6 +61,7 @@ class ClientCommandTest {
         assertEquals("images/a.jpg", request.imagePath)
         assertTrue(request.stockEnabled)
         assertEquals(3, request.stockCount)
+        assertEquals(DishHighlight.Recommended, request.highlight)
         assertEquals("现包", request.description)
         assertEquals(2, request.sortOrder)
         assertEquals("r-2", request.requestId)
@@ -68,6 +72,13 @@ class ClientCommandTest {
         val request = ClientCommand.UpdateDish(9L, draft(imagePath = null)).toRequest("r-3")
 
         assertEquals("", request.imagePath)
+    }
+
+    @Test
+    fun updateDishClearsHighlightWhenDraftHasNone() {
+        val request = ClientCommand.UpdateDish(9L, draft(highlight = null)).toRequest("r-highlight-clear")
+
+        assertEquals("", request.highlight)
     }
 
     @Test
@@ -94,6 +105,7 @@ class ClientCommandTest {
         assertNull(request.name)
         assertNull(request.priceCents)
         assertNull(request.imagePath)
+        assertNull(request.highlight)
         assertEquals("r-7", request.requestId)
     }
 
@@ -116,6 +128,7 @@ class ClientCommandTest {
             stockEnabled = true,
             stockCount = 6,
             soldOut = true,
+            highlight = DishHighlight.New,
             description = "手打",
             sortOrder = 4,
             enabled = false,
@@ -130,6 +143,7 @@ class ClientCommandTest {
         assertEquals("images/c.jpg", draft.imagePath)
         assertTrue(draft.stockEnabled)
         assertEquals(6, draft.stockCount)
+        assertEquals(DishHighlight.New, draft.highlight)
         assertEquals("手打", draft.description)
         assertEquals(4, draft.sortOrder)
     }

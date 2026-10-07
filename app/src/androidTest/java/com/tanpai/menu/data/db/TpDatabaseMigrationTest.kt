@@ -20,6 +20,34 @@ class TpDatabaseMigrationTest {
     )
 
     @Test
+    fun migrate2To3AddsHighlightAndKeepsDish() {
+        helper.createDatabase(TEST_DB_2_TO_3, 2).use { db ->
+            db.execSQL(
+                "INSERT INTO category (id, name, sortOrder, enabled, updatedAt) " +
+                    "VALUES (1, '热菜', 1, 1, 1000)"
+            )
+            db.execSQL(
+                "INSERT INTO dish (id, categoryId, name, priceCents, unit, imagePath, " +
+                    "stockEnabled, stockCount, soldOut, description, sortOrder, enabled, updatedAt) " +
+                    "VALUES (1, 1, '烤串', 300, '串', NULL, 1, 5, 0, '', 1, 1, 1000)"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB_2_TO_3, 3, true, TpDatabase.MIGRATION_2_3).use { db ->
+            db.query("SELECT name, highlight FROM dish WHERE id = 1").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("烤串", cursor.getString(0))
+                assertTrue(cursor.isNull(1))
+            }
+            db.execSQL("UPDATE dish SET highlight = 'new' WHERE id = 1")
+            db.query("SELECT highlight FROM dish WHERE id = 1").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("new", cursor.getString(0))
+            }
+        }
+    }
+
+    @Test
     fun migrate1To2CreatesDeviceTableAndKeepsMenu() {
         helper.createDatabase(TEST_DB, 1).use { db ->
             db.execSQL(
@@ -55,5 +83,6 @@ class TpDatabaseMigrationTest {
 
     private companion object {
         const val TEST_DB = "migration-test.db"
+        const val TEST_DB_2_TO_3 = "migration-test-2-to-3.db"
     }
 }

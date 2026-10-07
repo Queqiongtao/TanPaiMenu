@@ -1,7 +1,10 @@
 package com.tanpai.menu.backup
 
+import com.tanpai.menu.data.db.DishHighlight
+
 import kotlinx.serialization.SerializationException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -27,6 +30,7 @@ class BackupCodecTest {
         imagePath = "images/3b5128dc-fe48-44e5-abba-753cc1a3aaa9.jpg",
         stockEnabled = true,
         stockCount = 18,
+        highlight = DishHighlight.Recommended,
         updatedAt = 1_700_000_000_000L
     )
 
@@ -52,6 +56,7 @@ class BackupCodecTest {
         assertEquals(1L, decoded.categories.first().id)
         assertEquals(10L, decoded.dishes.first().id)
         assertEquals("images/3b5128dc-fe48-44e5-abba-753cc1a3aaa9.jpg", decoded.dishes.first().imagePath)
+        assertEquals(DishHighlight.Recommended, decoded.dishes.first().highlight)
     }
 
     @Test
@@ -65,6 +70,24 @@ class BackupCodecTest {
     @Test
     fun validateAcceptsCurrentFormat() {
         BackupCodec.validate(backup())
+    }
+
+    @Test
+    fun decodeFormat1WithoutHighlightDefaultsToNull() {
+        val json = """{
+            "format":1,
+            "exportedAt":"2026-10-05T03:20:30.123Z",
+            "app":"TanPaiMenu",
+            "categories":[{"id":1,"name":"热菜","sortOrder":0,"enabled":true,"updatedAt":1700000000000}],
+            "dishes":[{"id":10,"categoryId":1,"name":"烤串","priceCents":300,"unit":"串","imagePath":null,"stockEnabled":true,"stockCount":18,"soldOut":false,"description":"","sortOrder":0,"enabled":true,"updatedAt":1700000000000}],
+            "images":[]
+        }""".trimIndent()
+
+        val decoded = BackupCodec.decode(json)
+
+        assertEquals(1, decoded.format)
+        assertNull(decoded.dishes.single().highlight)
+        BackupCodec.validate(decoded)
     }
 
     @Test

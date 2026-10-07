@@ -1,5 +1,6 @@
 package com.tanpai.menu.backup
 
+import com.tanpai.menu.data.db.DishHighlight
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
@@ -27,6 +28,7 @@ data class BackupDish(
     val stockEnabled: Boolean = false,
     val stockCount: Int = 0,
     val soldOut: Boolean = false,
+    val highlight: DishHighlight? = null,
     val description: String = "",
     val sortOrder: Int = 0,
     val enabled: Boolean = true,
@@ -57,7 +59,7 @@ sealed interface BackupResult {
 
 object BackupCodec {
 
-    const val FORMAT = 1
+    const val FORMAT = 2
     const val APP_NAME = "TanPaiMenu"
     const val FILE_NAME = "backup.json"
     const val IMAGES_DIR = "images"

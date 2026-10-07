@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tanpai.menu.R
 import com.tanpai.menu.data.db.Dish
+import com.tanpai.menu.data.db.DishHighlight
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,12 +34,18 @@ class DishCardTest {
         InstrumentationRegistry.getInstrumentation().targetContext
             .getString(R.string.display_in_stock)
 
-    private fun dish(priceCents: Int, unit: String = "份", soldOut: Boolean = false) = Dish(
+    private fun dish(
+        priceCents: Int,
+        unit: String = "份",
+        soldOut: Boolean = false,
+        highlight: DishHighlight? = null
+    ) = Dish(
         categoryId = 1L,
         name = "原味鲜肉",
         priceCents = priceCents,
         unit = unit,
         soldOut = soldOut,
+        highlight = highlight,
         updatedAt = 0L
     )
 
@@ -91,6 +98,21 @@ class DishCardTest {
         composeRule.onNodeWithText("原味鲜肉").assertIsDisplayed()
         composeRule.onNodeWithText("¥10 / 份").assertIsDisplayed()
         composeRule.onNodeWithText(inStockText).assertIsDisplayed()
+    }
+
+    @Test
+    fun showsRecommendedHighlightBadge() {
+        setCard(dish(priceCents = 1000, highlight = DishHighlight.Recommended))
+        composeRule.onNodeWithText("推荐").assertIsDisplayed()
+    }
+
+    @Test
+    fun twoRowCardShowsNewHighlightBadge() {
+        setCard(
+            dish(priceCents = 1000, highlight = DishHighlight.New),
+            spec = DisplaySpec.TwoRowDefault
+        )
+        composeRule.onNodeWithText("新品").assertIsDisplayed()
     }
 
     @Test

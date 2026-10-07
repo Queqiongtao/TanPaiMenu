@@ -1,5 +1,6 @@
 package com.tanpai.menu.host
 
+import com.tanpai.menu.data.db.DishHighlight
 import com.tanpai.menu.net.protocol.CategoryDto
 import com.tanpai.menu.net.protocol.CategoryPatchRequest
 import com.tanpai.menu.net.protocol.DeviceDto
@@ -114,6 +115,25 @@ class HostApiTest {
             request("POST", "/dishes", """{"categoryId":1,"name":"烤肉","priceCents":1000000}""")
         )
         assertEquals(400, response.status)
+    }
+
+    @Test
+    fun patchDishAcceptsRecommendedAndNewHighlight() = runTest {
+        val recommended = api().handle(request("PATCH", "/dishes/10", """{"highlight":"recommended"}"""))
+        val newTag = api().handle(request("PATCH", "/dishes/10", """{"highlight":"new"}"""))
+
+        assertEquals(200, recommended.status)
+        assertTrue(recommended.bodyText.contains("\"highlight\":\"recommended\""))
+        assertEquals(200, newTag.status)
+        assertTrue(newTag.bodyText.contains("\"highlight\":\"new\""))
+    }
+
+    @Test
+    fun patchDishRejectsUnknownHighlight() = runTest {
+        val response = api().handle(request("PATCH", "/dishes/10", """{"highlight":"hot"}"""))
+
+        assertEquals(400, response.status)
+        assertEquals(ErrorCode.INVALID_ARGUMENT, response.errorCode())
     }
 
     @Test
@@ -278,8 +298,8 @@ class HostApiTest {
         )
 
         private val dishes = mutableListOf(
-            DishDto(10, 1, "烤串", 300, "串", null, true, 5, false, "", 1, true, STAMP),
-            DishDto(11, 1, "已下架", 100, "份", null, false, 0, false, "", 2, false, STAMP)
+            DishDto(10, 1, "烤串", 300, "串", null, true, 5, false, null, "", 1, true, STAMP),
+            DishDto(11, 1, "已下架", 100, "份", null, false, 0, false, null, "", 2, false, STAMP)
         )
 
         var createDishCalls = 0
@@ -341,6 +361,7 @@ class HostApiTest {
                 imagePath = request.imagePath,
                 stockEnabled = request.stockEnabled,
                 stockCount = request.stockCount,
+                highlight = request.highlight,
                 description = request.description,
                 sortOrder = request.sortOrder,
                 updatedAt = STAMP
@@ -352,7 +373,15 @@ class HostApiTest {
         override suspend fun patchDish(id: Long, patch: DishPatchRequest): WriteResult<DishDto> {
             val index = dishes.indexOfFirst { it.id == id }
             if (index < 0) return WriteResult.NotFound
-            val updated = dishes[index].copy(name = patch.name ?: dishes[index].name)
+            val highlight = when (val raw = patch.highlight) {
+                null -> dishes[index].highlight
+                "" -> null
+                else -> DishHighlight.fromWire(raw)
+            }
+            val updated = dishes[index].copy(
+                name = patch.name ?: dishes[index].name,
+                highlight = highlight
+            )
             dishes[index] = updated
             return WriteResult.Ok(updated)
         }
@@ -387,7 +416,7 @@ class HostApiTest {
             categories.clear()
             categories += CategoryDto(1, "热菜", 1, true, STAMP)
             dishes.clear()
-            dishes += DishDto(10, 1, "烤串", 300, "串", null, true, 5, false, "", 1, true, STAMP)
+            dishes += DishDto(10, 1, "烤串", 300, "串", null, true, 5, false, null, "", 1, true, STAMP)
         }
     }
 

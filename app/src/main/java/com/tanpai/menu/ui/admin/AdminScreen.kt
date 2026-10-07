@@ -363,6 +363,7 @@ fun AdminScreen(
             storeName = viewModel.storeName,
             autostart = viewModel.autostartEnabled,
             showStockHint = viewModel.showStockHint,
+            autoScrollEnabled = viewModel.autoScrollEnabled,
             cardAlphaPercent = viewModel.cardAlphaPercent,
             backgroundImagePath = viewModel.backgroundImagePath,
             backgroundStyleId = viewModel.backgroundStyleId,
@@ -379,6 +380,7 @@ fun AdminScreen(
             onStoreNameChange = { viewModel.updateStoreName(it) },
             onAutostartChange = { viewModel.updateAutostart(it) },
             onShowStockHintChange = { viewModel.updateShowStockHint(it) },
+            onAutoScrollChange = { viewModel.updateAutoScrollEnabled(it) },
             onCardAlphaChange = { viewModel.updateCardAlphaPercent(it) },
             onBackgroundScrimChange = { viewModel.updateBackgroundScrimPercent(it) },
             onBackgroundStyleChange = { viewModel.applyBackgroundStyle(it) },
@@ -417,6 +419,7 @@ private fun SettingsDialog(
     storeName: String,
     autostart: Boolean,
     showStockHint: Boolean,
+    autoScrollEnabled: Boolean,
     cardAlphaPercent: Int,
     backgroundImagePath: String?,
     backgroundStyleId: String?,
@@ -433,6 +436,7 @@ private fun SettingsDialog(
     onStoreNameChange: (String) -> Unit,
     onAutostartChange: (Boolean) -> Unit,
     onShowStockHintChange: (Boolean) -> Unit,
+    onAutoScrollChange: (Boolean) -> Unit,
     onCardAlphaChange: (Int) -> Unit,
     onBackgroundScrimChange: (Int) -> Unit,
     onBackgroundStyleChange: (String) -> Unit,
@@ -461,6 +465,7 @@ private fun SettingsDialog(
     var name by remember { mutableStateOf(storeName) }
     var auto by remember { mutableStateOf(autostart) }
     var showStock by remember { mutableStateOf(showStockHint) }
+    var autoScroll by remember { mutableStateOf(autoScrollEnabled) }
     var cardAlpha by remember { mutableStateOf(cardAlphaPercent / 100f) }
     var confirmExit by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
@@ -584,6 +589,21 @@ private fun SettingsDialog(
                     Text(stringResource(R.string.settings_show_stock_hint))
                     Switch(checked = showStock, onCheckedChange = { showStock = it })
                 }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(stringResource(R.string.settings_auto_scroll))
+                    Switch(checked = autoScroll, onCheckedChange = { autoScroll = it })
+                }
+                Text(
+                    text = stringResource(R.string.settings_auto_scroll_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -972,6 +992,7 @@ private fun SettingsDialog(
                     onStoreNameChange(name.trim())
                     onAutostartChange(auto)
                     onShowStockHintChange(showStock)
+                    onAutoScrollChange(autoScroll)
                     onDismiss()
                 }
             ) { Text(stringResource(R.string.admin_confirm)) }
@@ -989,6 +1010,7 @@ private fun SettingsDialog(
                 onStoreNameChange(name.trim())
                 onAutostartChange(auto)
                 onShowStockHintChange(showStock)
+                onAutoScrollChange(autoScroll)
                 exitToHome(context)
                 onDismiss()
             },

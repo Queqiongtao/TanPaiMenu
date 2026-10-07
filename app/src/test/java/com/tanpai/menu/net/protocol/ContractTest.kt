@@ -2,6 +2,7 @@ package com.tanpai.menu.net.protocol
 
 import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
+import com.tanpai.menu.data.db.DishHighlight
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
@@ -55,9 +56,21 @@ class ContractTest {
         val entity = Dish(
             id = 3, categoryId = 1, name = "烤串", priceCents = 300, unit = "串",
             imagePath = null, stockEnabled = true, stockCount = 0, soldOut = true,
+            highlight = DishHighlight.Recommended,
             description = "微辣", sortOrder = 5, enabled = false, updatedAt = 2000L
         )
         assertEquals(entity, entity.toDto().toEntity())
+    }
+
+    @Test
+    fun dishPatchDecodesHighlightTriState() {
+        val unchanged = ProtocolJson.decodeFromString(DishPatchRequest.serializer(), "{}")
+        val cleared = ProtocolJson.decodeFromString(DishPatchRequest.serializer(), "{\"highlight\":\"\"}")
+        val tagged = ProtocolJson.decodeFromString(DishPatchRequest.serializer(), "{\"highlight\":\"new\"}")
+
+        assertNull(unchanged.highlight)
+        assertEquals("", cleared.highlight)
+        assertEquals("new", tagged.highlight)
     }
 
     @Test

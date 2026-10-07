@@ -193,6 +193,7 @@ class ClientSessionTest {
             imagePath = null,
             stockEnabled = false,
             stockCount = 0,
+            highlight = null,
             description = "",
             sortOrder = 0
         )
@@ -259,6 +260,7 @@ class ClientSessionTest {
         imagePath = imagePath,
         stockEnabled = stockEnabled,
         stockCount = stockCount,
+        highlight = highlight,
         description = description,
         sortOrder = sortOrder
     )

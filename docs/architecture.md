@@ -21,31 +21,32 @@ app/src/main/java/com/tanpai/menu/
 ├─ client/      # 客户端侧：配对、连接会话、内存镜像、重连退避（M10）、写命令与执行器（M11）
 ├─ net/protocol/ # 契约 DTO、ISO-8601、实体 ↔ DTO 映射（主机与客户端共用）
 ├─ net/         # 主机地址解析、REST 客户端（含全部写方法与图片上传）、WS 客户端（M10 / M11）
-├─ ui/display/  # 顾客展示页（2 列 × 6 行横卡；自定义背景图 / 内置样式与白色蒙版；店名左侧微信二维码（店主上传或内置默认）与点击放大浮层；内置字体见 ui/theme）
+├─ ui/display/  # 顾客展示页（2 列 × 6 行横卡；自定义背景图 / 内置样式与白色蒙版；推荐 / 新品标签、沽清盖章动画与空闲自动滚动；店名左侧微信二维码（店主上传或内置默认）与点击放大浮层；内置字体见 ui/theme）
 ├─ ui/admin/    # 管理与设置页（双端共用）
-├─ ui/theme/    # 字体（Noto Sans SC Bold + 店名专用霞鹜文楷子集）、字型、展示页状态语义色、店名招牌配色与内置背景样式
+├─ ui/theme/    # 字体（Noto Sans SC Bold + 店名专用霞鹜文楷子集）、字型、展示页状态/标签语义色、店名招牌配色与内置背景样式
 ├─ ui/client/   # 手机客户端界面：配对页 / 菜单页（只读 + 管理模式编辑）/ 设置弹窗（M10 / M11）
 ├─ ui/dialogs/  # 分类 / 菜品编辑与确认对话框（管理页与手机端共用）
 ├─ imaging/     # 压缩、存储、加载
-├─ backup/      # 备份格式（format 1）与导出 / 导入
+├─ backup/      # 备份格式（format 2，兼容读取 format 1）与导出 / 导入
 ├─ logging/     # TpLog 落盘日志
 └─ kiosk/       # 自启、常亮、沉浸、PIN 门禁
 ```
 
 模块边界：`host` 与 `client` 不互相引用；跨模块只经 `net` / `data` 的接口与 DTO 交互。
 
-Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 已落地 `net/protocol` 与 `host`（M6 契约与单写者、M7 REST / WS 与配对信息、M8 前台服务保活 / 启停开关 / 在线设备列表、M9 契约测试与文档回填）；Phase 3 的 M10 已落地 `net`（地址解析 / REST / WS 客户端）、`client`（配对 / 会话 / 镜像 / 退避）与 `ui/client`（配对页 / 只读菜单页），角色分流入 `data/Role.kt` 与 `MainActivity`；M11 追加客户端写路径（`client/ClientCommand`、`ClientCommandExecutor`、`ClientSession.submit/uploadImage`）、`ui/client` 管理模式、`ui/dialogs` 共用对话框与 `imaging/ImageCompressor`，并在 `host` 侧增加「允许手机编辑」判定与 `POST /menu/reset`。
+Phase 1 已落地的包：`data`、`domain`、`imaging`、`backup`、`logging`、`kiosk`、`ui/display`、`ui/admin`；Phase 2 已落地 `net/protocol` 与 `host`（M6 契约与单写者、M7 REST / WS 与配对信息、M8 前台服务保活 / 启停开关 / 在线设备列表、M9 契约测试与文档回填）；Phase 3 的 M10 已落地 `net`（地址解析 / REST / WS 客户端）、`client`（配对 / 会话 / 镜像 / 退避）与 `ui/client`（配对页 / 只读菜单页），角色分流入 `data/Role.kt` 与 `MainActivity`；M11 追加客户端写路径（`client/ClientCommand`、`ClientCommandExecutor`、`ClientSession.submit/uploadImage`）、`ui/client` 管理模式、`ui/dialogs` 共用对话框与 `imaging/ImageCompressor`，并在 `host` 侧增加「允许手机编辑」判定与 `POST /menu/reset`；Phase 4 追加 `Dish.highlight`、Room 2→3、备份 format 2、展示页标签 / 盖章动画 / 空闲自动滚动。
 
 ## 3. 关键流程与数据流
 
-- 展示：`data` 读 Room → `ui/display` 渲染；沽清卡片灰化并在行尾显示「已售完」徽标。
+- 展示：`data` 读 Room → `ui/display` 渲染；沽清卡片灰化并在行尾显示「已售完」徽标；`recommended` / `new` 标签叠加在缩略图左上角，只有从有货切换到售完时行尾徽标播放一次盖章动画（首次进入列表显示静态终态）。
 - 展示布局：**由 `ui/display/DisplaySpec.kt` 的规则按运行时可用宽高分档**（`displaySpecFor`：单卡 ≥ 380dp 用单行三列、≥ 240dp 用两行卡片，列数 1–4 自动，一屏目标 12 道；横竖屏与不同尺寸设备都不改代码，见 `docs/design/0013-横竖屏与多尺寸自适应.md`）——宽档（≥ 720dp 顶栏）保持原版式：顶部条 72dp（店名 48sp 居中的渐变招牌——`StoreNameColors` 紫罗兰横向渐变底 + 1dp 半透明白描边 + 8dp 投影，`StoreNameFontFamily` 楷体子集，超 6 字降档 36sp，长按店名 2 秒进管理；多分类时靠右的分类胶囊 16sp；店名左侧为微信二维码入口：小码 56dp + 「加微信」13sp，点击弹出全屏放大浮层、5 秒自动复原或点击任意处立即关闭，店主未上传时用内置默认二维码）+ 横卡（左 56dp 方图 + 定宽三列：名称弹性 / 价格 128dp / 状态 68dp，均左对齐；菜名超宽跑马灯滚动），列数 2、卡片 68dp、列距 16dp、行距 12dp、底部留白 24dp，12 道一屏、超出滚动；窄档（顶栏 < 720dp，如竖屏 601dp 宽）改紧凑顶栏 60dp + 店名 32sp + 二维码小码 48dp，卡片变两行（上行缩略图 56dp——与单行档同尺寸 + 菜名，下行价格胶囊 + 状态徽标）、卡高 120dp，T10 竖屏同样 12 道一屏；卡片底色按设置的不透明度（`SettingsStore.cardAlphaPercent`，默认 15%、可调 15%–100%）叠加；价格用 `domain/PriceFormatter.formatYuan` 渲染，整数省略小数位（`¥10`）、有角分保留两位（`¥10.50`），并渲染为价格胶囊——宽度随内容自适应（单行档 96–128dp，外层仍按 128dp 列宽占位以保证跨卡对齐；两行档最小 72dp、数字 20sp / 单位 12sp）、固定 90% 白底（`ui/theme/PriceColors.Container`，不随卡片不透明度变化）+ 喜庆红 22sp 数字 + 13sp 单位（`ui/theme/PriceColors.Content`），见 `docs/design/0012-展示页价格强调.md`。字体 `ui/theme/Type.kt`（菜名等 Noto Sans SC Bold，OFL 1.1；店名霞鹜文楷子集，OFL 1.1，见 `docs/third-party/`）。
 - 卖出：`ui/admin` 命令（乐观更新）→ REST → `host` 单写者队列 → 事务（写 `SaleRecord` + 扣库存 + 全局 `version` +1）→ WS 广播 → 各端应用。
 - 展示背景：`DisplayScreen` 在内容层下叠一层背景 + 一层白色蒙版（`SettingsStore.backgroundScrimPercent`，默认 25%）；背景按优先级二选一——自定义图（`backgroundImagePath`，`AsyncImage(Crop)` 整屏铺满）> 内置样式（`backgroundStyleId` 经 `BackgroundStyles.byIdOrDefault` 解析，未设置或未知 id 回退 `DEFAULT_ID` 喜庆红）。两者互斥，由管理页写入时保证；内置样式不参与孤儿图清理与备份。见 `docs/design/0007-展示页背景图片.md`、`docs/design/0009-展示页内置背景样式.md`、`docs/design/0011-展示页默认外观与整数价格.md`。
-- 展示微信二维码：`SettingsStore.wechatQrImagePath`（key `wechat_qr_image`）指向 `images/<uuid>.png`；店主在管理页设置弹窗经 `ImageStore.importLosslessFromUri`（PNG 无损、长边 1024）导入，可相册或拍照；放大浮层在 `ui/display/WechatQrOverlay.kt`（`WECHAT_QR_AUTO_COLLAPSE_MILLIS = 5000`）；`DisplayScreen` 计算图片模型 `Any`——已上传且文件存在的 `File` 优先，否则回退内置资源 `R.drawable.wechat_qr_default`（`res/drawable-nodpi`，入口恒显示）；与背景图同为「非菜品图」但内置图是资源，故只需保留店主上传的那张，须加入启动孤儿图清理与「恢复默认菜单」保留集合；不参与备份（`backup.json` 仍 format 1）。见 `docs/design/0010-展示页微信二维码.md`。
+- 展示微信二维码：`SettingsStore.wechatQrImagePath`（key `wechat_qr_image`）指向 `images/<uuid>.png`；店主在管理页设置弹窗经 `ImageStore.importLosslessFromUri`（PNG 无损、长边 1024）导入，可相册或拍照；放大浮层在 `ui/display/WechatQrOverlay.kt`（`WECHAT_QR_AUTO_COLLAPSE_MILLIS = 5000`）；`DisplayScreen` 计算图片模型 `Any`——已上传且文件存在的 `File` 优先，否则回退内置资源 `R.drawable.wechat_qr_default`（`res/drawable-nodpi`，入口恒显示）；与背景图同为「非菜品图」但内置图是资源，故只需保留店主上传的那张，须加入启动孤儿图清理与「恢复默认菜单」保留集合；不参与备份（`backup.json` 仍不包含微信二维码）。见 `docs/design/0010-展示页微信二维码.md`。
 - 同步：客户端 `/state` 全量对齐 + WS 事件增量；用 `version` 判新旧；断线重连重取快照。
 - 手机端编辑（M11）：`ui/client` 管理模式 → `client/ClientCommand`（命令 → 契约请求，带唯一 `requestId`）→ `ClientCommandExecutor` / `net/HostRestClient` → `host/HostApi` → `MenuRepository` 单写者事务 → WS 广播 → 两端镜像重新对齐。提交期间禁用入口、**不做乐观更新与回滚**；主机按 `X-Device-Role: client` + `SettingsStore.clientEditsEnabled` 决定是否放行写请求（关闭时 403 `forbidden`，且拒绝前先丢弃请求体以保护 keep-alive 连接）；「恢复默认菜单」走 `POST /menu/reset` → `FullReload` → 广播 `snapshot`；图片压缩后经 `POST /images` 上传。见 `docs/design/0020-手机客户端编辑.md`。
 - 配对：主机生成 token → 二维码 / NSD / 手输 → 客户端带 token 请求。
+- 展示打磨（Phase 4）：`Dish.highlight` 经 Room / REST 同步；`DisplayScreen` 用缩略图徽标和一次性盖章动画表达状态；`DishGrid` 在菜品超过首屏且 15 秒无操作后每 6 秒自动滚动一行，触摸立即重置，设置项 `SettingsStore.autoScrollEnabled` 可关闭。见 `docs/design/0021-展示页动画与打磨.md`。
 
 Phase 2 主机写管线（M6 起实现）：客户端 / 本机命令 → `host` 路由与鉴权 → `net/protocol` 解析 → `MenuRepository` 单写者锁 → 事务提交 → `MenuChange` 事件 → WS 广播。
 
@@ -64,7 +65,7 @@ Phase 1 已实现的单机流程（含实现位置）：
 - 启动：`App.onCreate` → `TpLog.init` → `MenuRepository.seedIfEmpty` → `ImageStore.deleteOrphans(菜品图 ∪ 背景图 ∪ 微信二维码)`。背景图与微信二维码不属于任何菜品，必须显式加入引用集合，否则每次冷启动会被当孤儿图删除。
 - 卖出 / 撤销：`ui/admin/AdminViewModel` → `MenuRepository.sell/unsell`（事务内 `SellPolicy` / `UnsellPolicy`，并令 `version` +1）。
 - 图片：`ui/admin/AdminDialogs`（菜品图）与设置弹窗（背景图 / 微信二维码）相册 / 拍照 → `ImageStore.importFromUri` → `filesDir/images/<uuid>.jpg`；菜品图长边 1280 / 质量 80，背景图长边 2048 / 质量 85；微信二维码走 `importLosslessFromUri`（PNG 无损、长边 1024）→ `images/<uuid>.png`。 菜品图另有 12 张内置默认图（`assets/dishes/*.jpg`，512×512、JPEG 85），首启 `seedIfEmpty` 与「恢复默认菜单」时经 `ImageStore.importSeedAsset` 复制进 `filesDir/images` 并写入 `Dish.imagePath`（导入在数据库事务外，失败则该菜回退首字占位），见 `docs/design/0014-默认菜品图片.md`。
-- 备份：`backup/BackupManager` 按 format 1 导出 `backup.json` + `images/`；导入先校验后整库覆盖（`MenuRepository.replaceAll`）。
+- 备份：`backup/BackupManager` 按 format 2 导出 `backup.json` + `images/`，可读取 format 1；导入先校验后整库覆盖（`MenuRepository.replaceAll`）。
 - 门禁：`ui/TanPaiMenuApp`（长按店名 2 秒 + PIN；忘记密码长按 3 秒 → 强制重设）、`ui/admin/AdminDialogs`（修改管理密码 / 关闭密码保护）、`data/PinManager`（失败锁定、`clearPin`）、`kiosk/Kiosk`（沉浸 / 常亮 / 退出到桌面）。见 `docs/design/0017-管理密码重置与修改.md`。
 
 - 主机服务（M7）：`App.onCreate` 在 IO 协程内启动 `HostServer`（NanoWSD，端口从 `SettingsStore.serverPort` 起顺延 8080→8082）→ `host/HostApi` 做 Bearer 鉴权 / `requestId` 幂等 / 参数校验 → `host/RepositoryMenuBackend` 走 `MenuRepository` 单写者事务 → 事务提交事件由 `host/WsHub` 广播给各 WS 连接（首帧 `snapshot`，增量 `dish.*` / `category.*` / `device.*`）；图片走 `POST /images`（multipart，魔数判型，长边 ≤1280 JPEG）与 `GET /images/{name}`；设备注册表在 `connected_device`（`/devices`，`lastSeen` > 30s 视为离线）；配对信息（`http://<ip>:<port>`、`pairToken`、zxing 二维码）在管理页设置弹窗展示并可更换。容器差异：请求体不依赖 NanoHTTPD `parseBody`，按 `Content-Length` 读原始字节并显式 UTF-8 解码（否则中文乱码、且 PATCH 拿不到体）；4401 关闭帧手工构造。见 `docs/design/0015-主机服务接口实现.md`。
@@ -86,7 +87,7 @@ Phase 1 已实现的单机流程（含实现位置）：
 ## 6. 数据迁移
 
 - Room `exportSchema = true`，schema JSON 入库 `app/schemas/`。
-- 每次 schema 变更必须提供 Migration 与迁移测试；升级安装保留数据。
+- 每次 schema 变更必须提供 Migration 与迁移测试；升级安装保留数据。当前迁移链为 1→2（设备表）与 2→3（`dish.highlight`）。
 
 ## 7. 构建与发布
 
@@ -130,3 +131,4 @@ Phase 1 已实现的单机流程（含实现位置）：
 | 2026-10-07 | 门禁补齐：修改管理密码、关闭密码保护、忘记密码长按重置 | 0017、0003 |
 | 2026-10-07 | M10 落地：角色选择与运行形态分流（`Role` / `MainActivity` / `App.applyRole`）、一次性 6 位配对码与 `POST /pair`、手机客户端只读浏览与断线重连（`net/` + `client/` + `ui/client/`）；OkHttp 升为直接依赖 | 0018、0019、0001、0002、0015 |
 | 2026-10-07 | M11 落地：手机端编辑（管理模式、分类 / 菜品增删改、卖出 / 撤销 / 沽清、恢复默认菜单、压缩上传图片）、主机「允许手机编辑」判定（`X-Device-Role` + 403 `forbidden`）、`POST /menu/reset` 与 `/state` 店名下发；撤销改为全局最后一条 | 0020、0001、0002、0015、0019 |
+| 2026-10-07 | Phase 4 落地：推荐 / 新品标签、沽清盖章动画、空闲自动滚动；Room 2→3、契约标签字段、备份 format 2；启动淡入按性能门禁回退静态 | 0021、0001、0004 |

@@ -5,6 +5,7 @@ import com.tanpai.menu.net.protocol.CategoryPatchRequest
 import com.tanpai.menu.net.protocol.DishCreateRequest
 import com.tanpai.menu.net.protocol.DishPatchRequest
 import com.tanpai.menu.data.db.Dish
+import com.tanpai.menu.data.db.DishHighlight
 import java.util.UUID
 
 /**
@@ -20,6 +21,7 @@ data class DishDraft(
     val imagePath: String?,
     val stockEnabled: Boolean,
     val stockCount: Int,
+    val highlight: DishHighlight?,
     val description: String,
     val sortOrder: Int
 )
@@ -32,6 +34,7 @@ fun Dish.toDraft(): DishDraft = DishDraft(
     imagePath = imagePath,
     stockEnabled = stockEnabled,
     stockCount = stockCount,
+    highlight = highlight,
     description = description,
     sortOrder = sortOrder
 )
@@ -83,6 +86,7 @@ internal fun ClientCommand.CreateDish.toRequest(requestId: String = newRequestId
         imagePath = draft.imagePath,
         stockEnabled = draft.stockEnabled,
         stockCount = draft.stockCount,
+        highlight = draft.highlight,
         description = draft.description,
         sortOrder = draft.sortOrder,
         requestId = requestId
@@ -101,6 +105,7 @@ internal fun ClientCommand.UpdateDish.toRequest(requestId: String = newRequestId
         imagePath = draft.imagePath.orEmpty(),
         stockEnabled = draft.stockEnabled,
         stockCount = draft.stockCount,
+        highlight = draft.highlight?.wireValue.orEmpty(),
         description = draft.description,
         sortOrder = draft.sortOrder,
         requestId = requestId

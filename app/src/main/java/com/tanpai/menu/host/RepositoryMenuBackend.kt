@@ -5,6 +5,7 @@ import com.tanpai.menu.data.MenuRepository
 import com.tanpai.menu.data.db.ConnectedDevice
 import com.tanpai.menu.data.db.DeviceDao
 import com.tanpai.menu.data.db.Dish
+import com.tanpai.menu.data.db.DishHighlight
 import com.tanpai.menu.domain.SellError
 import com.tanpai.menu.domain.SellResult
 import com.tanpai.menu.imaging.ImageStore
@@ -84,6 +85,7 @@ class RepositoryMenuBackend(
                 imagePath = request.imagePath?.takeIf { it.isNotBlank() },
                 stockEnabled = request.stockEnabled,
                 stockCount = request.stockCount,
+                highlight = request.highlight,
                 description = request.description,
                 sortOrder = request.sortOrder,
                 updatedAt = 0L
@@ -102,6 +104,11 @@ class RepositoryMenuBackend(
             "" -> null
             else -> raw
         }
+        val highlight = when (val raw = patch.highlight) {
+            null -> current.highlight
+            "" -> null
+            else -> DishHighlight.fromWire(raw) ?: return WriteResult.Conflict
+        }
         val updated = current.copy(
             categoryId = patch.categoryId ?: current.categoryId,
             name = patch.name?.trim() ?: current.name,
@@ -111,6 +118,7 @@ class RepositoryMenuBackend(
             stockEnabled = patch.stockEnabled ?: current.stockEnabled,
             stockCount = patch.stockCount ?: current.stockCount,
             soldOut = patch.soldOut ?: current.soldOut,
+            highlight = highlight,
             description = patch.description ?: current.description,
             sortOrder = patch.sortOrder ?: current.sortOrder,
             enabled = patch.enabled ?: current.enabled

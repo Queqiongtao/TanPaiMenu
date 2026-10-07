@@ -1,5 +1,9 @@
 package com.tanpai.menu.ui.display
 
+import android.os.SystemClock
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -44,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -63,16 +69,21 @@ import coil.compose.AsyncImage
 import com.tanpai.menu.R
 import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
+import com.tanpai.menu.data.db.DishHighlight
 import com.tanpai.menu.domain.PriceFormatter
 import com.tanpai.menu.kiosk.KeepScreenOn
 import com.tanpai.menu.ui.theme.BackgroundStyles
 import com.tanpai.menu.ui.theme.ChineseFontFamily
+import com.tanpai.menu.ui.theme.HighlightColors
 import com.tanpai.menu.ui.theme.PriceColors
 import com.tanpai.menu.ui.theme.StatusColors
 import com.tanpai.menu.ui.theme.StoreNameColors
 import com.tanpai.menu.ui.theme.StoreNameFontFamily
 import com.tanpai.menu.ui.theme.backgroundStyle
 import java.io.File
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** 店名字数超过该值时降档。 */
@@ -126,6 +137,7 @@ fun DisplayScreen(
     viewModel: DisplayViewModel,
     storeName: String,
     showStockHint: Boolean,
+    autoScrollEnabled: Boolean = true,
     cardAlpha: Float = 1f,
     backgroundImagePath: String? = null,
     backgroundStyleId: String? = null,
@@ -204,6 +216,7 @@ fun DisplayScreen(
                     else -> DishGrid(
                         dishes = dishes,
                         showStockHint = showStockHint,
+                        autoScrollEnabled = autoScrollEnabled,
                         cardAlpha = cardAlpha,
                         spec = spec
                     )
@@ -376,10 +389,46 @@ private fun CategoryChip(
 private fun DishGrid(
     dishes: List<Dish>,
     showStockHint: Boolean,
+    autoScrollEnabled: Boolean,
     cardAlpha: Float,
     spec: DisplaySpec
 ) {
+    val gridState = rememberLazyGridState()
+    var lastInteractionAt by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    var lastAutoScrollAt by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(gridState, autoScrollEnabled) {
+        if (!autoScrollEnabled) return@LaunchedEffect
+        gridState.interactionSource.interactions.collect {
+            lastInteractionAt = SystemClock.elapsedRealtime()
+        }
+    }
+
+    LaunchedEffect(autoScrollEnabled, dishes, spec.columns) {
+        if (!autoScrollEnabled) return@LaunchedEffect
+        lastInteractionAt = SystemClock.elapsedRealtime()
+        lastAutoScrollAt = 0L
+        while (true) {
+            delay(AutoScrollPollMillis)
+            val now = SystemClock.elapsedRealtime()
+            if (gridState.isScrollInProgress) continue
+            if (now - lastInteractionAt < AutoScrollIdleMillis) continue
+            if (lastAutoScrollAt != 0L && now - lastAutoScrollAt < AutoScrollStepMillis) continue
+
+            val layout = gridState.layoutInfo
+            val target = nextAutoScrollTarget(
+                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
+                itemCount = layout.totalItemsCount,
+                columns = spec.columns,
+                visibleItemCount = layout.visibleItemsInfo.size
+            ) ?: continue
+            gridState.animateScrollToItem(target)
+            lastAutoScrollAt = SystemClock.elapsedRealtime()
+        }
+    }
+
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Fixed(spec.columns),
         modifier = Modifier.fillMaxSize(),
         horizontalArrangement = Arrangement.spacedBy(spec.gridColumnSpacing),
@@ -547,10 +596,56 @@ private fun TwoRowContent(
     }
 }
 
-/** 缩略图：整块随售完灰化。 */
+/** 缩略图：整块随售完灰化；推荐 / 新品标签叠加在左上角。 */
 @Composable
 private fun DishThumbnailContainer(dish: Dish, spec: DisplaySpec, contentAlpha: Float) {
-    Box(modifier = Modifier.alpha(contentAlpha)) { DishThumbnail(dish, spec.thumbnailSize) }
+    Box(modifier = Modifier.alpha(contentAlpha)) {
+        DishThumbnail(dish, spec.thumbnailSize)
+        dish.highlight?.let { highlight ->
+            DishHighlightBadge(
+                highlight = highlight,
+                spec = spec,
+                modifier = Modifier.align(Alignment.TopStart)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DishHighlightBadge(
+    highlight: DishHighlight,
+    spec: DisplaySpec,
+    modifier: Modifier = Modifier
+) {
+    val text = stringResource(
+        when (highlight) {
+            DishHighlight.Recommended -> R.string.admin_highlight_recommended
+            DishHighlight.New -> R.string.admin_highlight_new
+        }
+    )
+    val containerColor = when (highlight) {
+        DishHighlight.Recommended -> HighlightColors.RecommendedContainer
+        DishHighlight.New -> HighlightColors.NewContainer
+    }
+    val contentColor = when (highlight) {
+        DishHighlight.Recommended -> HighlightColors.RecommendedContent
+        DishHighlight.New -> HighlightColors.NewContent
+    }
+    Surface(
+        modifier = modifier.padding(4.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+            style = MaterialTheme.typography.labelMedium,
+            fontSize = spec.statusTextSize,
+            fontFamily = ChineseFontFamily,
+            maxLines = 1
+        )
+    }
 }
 
 /** 菜名：两档字号一致（22sp），超出列宽走跑马灯。 */
@@ -580,9 +675,32 @@ private fun DishStatus(
     showStockHint: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val stampScale = remember { Animatable(1f) }
+    val stampAlpha = remember { Animatable(1f) }
+    var wasSoldOut by remember { mutableStateOf(dish.soldOut) }
+
+    LaunchedEffect(dish.soldOut) {
+        if (dish.soldOut && !wasSoldOut) {
+            stampScale.snapTo(1.28f)
+            stampAlpha.snapTo(0.2f)
+            coroutineScope {
+                launch { stampScale.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f)) }
+                launch { stampAlpha.animateTo(1f, tween(durationMillis = 220)) }
+            }
+        }
+        wasSoldOut = dish.soldOut
+    }
+
     Box(modifier = modifier, contentAlignment = Alignment.CenterStart) {
         if (dish.soldOut) {
-            SoldOutBadge(fontSize = spec.statusTextSize)
+            SoldOutBadge(
+                fontSize = spec.statusTextSize,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = stampScale.value
+                    scaleY = stampScale.value
+                    alpha = stampAlpha.value
+                }
+            )
         } else if (showStockHint) {
             val status = stockStatus(dish)
             StatusBadge(

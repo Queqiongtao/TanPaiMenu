@@ -36,6 +36,8 @@ data class Dish(
     val stockEnabled: Boolean = false,
     val stockCount: Int = 0,
     val soldOut: Boolean = false,
+    /** 展示标签：推荐 / 新品；null 表示无标签（`docs/design/0021`）。 */
+    val highlight: DishHighlight? = null,
     val description: String = "",
     val sortOrder: Int = 0,
     val enabled: Boolean = true,

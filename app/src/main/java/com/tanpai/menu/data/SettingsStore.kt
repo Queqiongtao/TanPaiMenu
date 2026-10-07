@@ -21,6 +21,11 @@ class SettingsStore(context: Context) : PairCodeStore {
         get() = prefs.getBoolean(KEY_SHOW_STOCK, true)
         set(value) = prefs.edit().putBoolean(KEY_SHOW_STOCK, value).apply()
 
+    /** 展示页空闲时是否轻量自动滚动；任何触摸都会重置等待（`docs/design/0021`）。 */
+    var autoScrollEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_SCROLL, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_SCROLL, value).apply()
+
     /** 展示页菜品卡片底部不透明度（百分比，范围 [MIN_CARD_ALPHA_PERCENT]..100）。 */
     var cardAlphaPercent: Int
         get() = prefs.getInt(KEY_CARD_ALPHA, DEFAULT_CARD_ALPHA_PERCENT)
@@ -200,6 +205,7 @@ class SettingsStore(context: Context) : PairCodeStore {
         const val KEY_PIN_LOCK_UNTIL = "admin_pin_lock_until"
         const val KEY_AUTOSTART = "autostart_enabled"
         const val KEY_SHOW_STOCK = "show_stock"
+        const val KEY_AUTO_SCROLL = "auto_scroll"
         const val KEY_CARD_ALPHA = "card_alpha"
         /** 卡片底不透明度默认值（百分比）。 */
         const val DEFAULT_CARD_ALPHA_PERCENT = 15

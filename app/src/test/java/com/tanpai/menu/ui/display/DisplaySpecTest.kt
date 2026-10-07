@@ -85,6 +85,19 @@ class DisplaySpecTest {
     }
 
     @Test
+    fun autoScrollAdvancesOneRowAndWrapsAtEnd() {
+        assertEquals(4, nextAutoScrollTarget(2, itemCount = 12, columns = 2, visibleItemCount = 6))
+        assertEquals(0, nextAutoScrollTarget(10, itemCount = 12, columns = 2, visibleItemCount = 6))
+    }
+
+    @Test
+    fun autoScrollStaysDisabledWhenAllItemsFit() {
+        assertNull(nextAutoScrollTarget(0, itemCount = 6, columns = 2, visibleItemCount = 6))
+        assertNull(nextAutoScrollTarget(0, itemCount = 0, columns = 2, visibleItemCount = 0))
+        assertNull(nextAutoScrollTarget(0, itemCount = 8, columns = 0, visibleItemCount = 4))
+    }
+
+    @Test
     fun defaultPresetsMatchWideLayout() {
         assertEquals(DishCardLayout.SingleRow, DisplaySpec.Default.cardLayout)
         assertEquals(DishCardLayout.TwoRow, DisplaySpec.TwoRowDefault.cardLayout)

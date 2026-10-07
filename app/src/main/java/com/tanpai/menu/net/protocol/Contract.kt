@@ -1,5 +1,6 @@
 package com.tanpai.menu.net.protocol
 
+import com.tanpai.menu.data.db.DishHighlight
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -63,6 +64,7 @@ data class DishDto(
     val stockEnabled: Boolean = false,
     val stockCount: Int = 0,
     val soldOut: Boolean = false,
+    val highlight: DishHighlight? = null,
     val description: String = "",
     val sortOrder: Int = 0,
     val enabled: Boolean = true,
@@ -138,6 +140,7 @@ data class DishCreateRequest(
     val imagePath: String? = null,
     val stockEnabled: Boolean = false,
     val stockCount: Int = 0,
+    val highlight: DishHighlight? = null,
     val description: String = "",
     val sortOrder: Int = 0,
     val requestId: String? = null
@@ -156,6 +159,8 @@ data class DishPatchRequest(
     val stockEnabled: Boolean? = null,
     val stockCount: Int? = null,
     val soldOut: Boolean? = null,
+    /** null 不修改，空串清空，否则为 DishHighlight.wireValue。 */
+    val highlight: String? = null,
     val description: String? = null,
     val sortOrder: Int? = null,
     val enabled: Boolean? = null,

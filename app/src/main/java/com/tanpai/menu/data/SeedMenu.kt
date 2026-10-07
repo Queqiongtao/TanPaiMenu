@@ -2,6 +2,7 @@ package com.tanpai.menu.data
 
 import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
+import com.tanpai.menu.data.db.DishHighlight
 
 data class SeedCategory(val category: Category, val dishes: List<Dish>)
 
@@ -15,7 +16,12 @@ data class SeedCategory(val category: Category, val dishes: List<Dish>)
  */
 object SeedMenu {
 
-    private data class SeedDish(val name: String, val priceYuan: Int, val imageAsset: String)
+    private data class SeedDish(
+        val name: String,
+        val priceYuan: Int,
+        val imageAsset: String,
+        val highlight: DishHighlight? = null
+    )
 
     private val menu: List<SeedDish> = listOf(
         SeedDish("原味鲜肉", 10, "pork.jpg"),
@@ -24,12 +30,12 @@ object SeedMenu {
         SeedDish("臭香皮蛋", 12, "century-egg.jpg"),
         SeedDish("贡菜馄饨", 12, "gong-cai.jpg"),
         SeedDish("香菇马蹄", 12, "shiitake-water-chestnut.jpg"),
-        SeedDish("虾仁鲜肉", 20, "shrimp.jpg"),
+        SeedDish("虾仁鲜肉", 20, "shrimp.jpg", DishHighlight.Recommended),
         SeedDish("全家福", 20, "wonton-bowl.jpg"),
         SeedDish("荠菜鲜肉", 12, "shepherds-purse.jpg"),
         SeedDish("辣白菜鲜肉", 12, "kimchi.jpg"),
         SeedDish("咸蛋黄鲜肉", 14, "salted-yolk.jpg"),
-        SeedDish("芝士玉米鲜肉", 14, "cheese-corn.jpg")
+        SeedDish("芝士玉米鲜肉", 14, "cheese-corn.jpg", DishHighlight.New)
     )
 
     /** 种子图 asset 名，顺序与 [categories] 中的菜品一致，供测试与导入遍历。 */
@@ -45,6 +51,7 @@ object SeedMenu {
                     priceCents = seed.priceYuan * 100,
                     unit = "份",
                     stockEnabled = false,
+                    highlight = seed.highlight,
                     sortOrder = index + 1,
                     updatedAt = 0L
                 )

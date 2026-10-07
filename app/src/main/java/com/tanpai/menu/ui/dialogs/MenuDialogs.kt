@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -44,6 +45,7 @@ import coil.compose.AsyncImage
 import com.tanpai.menu.R
 import com.tanpai.menu.data.db.Category
 import com.tanpai.menu.data.db.Dish
+import com.tanpai.menu.data.db.DishHighlight
 import java.io.File
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -116,6 +118,7 @@ fun DishEditDialog(
     var unit by remember { mutableStateOf(initial?.unit ?: "") }
     var stockEnabled by remember { mutableStateOf(initial?.stockEnabled ?: false) }
     var stockCount by remember { mutableStateOf((initial?.stockCount ?: 0).toString()) }
+    var highlight by remember { mutableStateOf(initial?.highlight) }
     var sortOrder by remember { mutableStateOf((initial?.sortOrder ?: 0).toString()) }
     var description by remember { mutableStateOf(initial?.description ?: "") }
     var imagePath by remember { mutableStateOf(initial?.imagePath) }
@@ -223,6 +226,32 @@ fun DishEditDialog(
                         .fillMaxWidth()
                         .padding(top = 8.dp)
                 )
+                Text(
+                    text = stringResource(R.string.admin_highlight_label),
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = highlight == null,
+                        onClick = { highlight = null },
+                        label = { Text(stringResource(R.string.admin_highlight_none)) }
+                    )
+                    FilterChip(
+                        selected = highlight == DishHighlight.Recommended,
+                        onClick = { highlight = DishHighlight.Recommended },
+                        label = { Text(stringResource(R.string.admin_highlight_recommended)) }
+                    )
+                    FilterChip(
+                        selected = highlight == DishHighlight.New,
+                        onClick = { highlight = DishHighlight.New },
+                        label = { Text(stringResource(R.string.admin_highlight_new)) }
+                    )
+                }
                 Row(
                     modifier = Modifier.padding(top = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -290,6 +319,7 @@ fun DishEditDialog(
                             stockEnabled = stockEnabled,
                             stockCount = stockCount.toIntOrNull() ?: 0,
                             soldOut = initial?.soldOut ?: false,
+                            highlight = highlight,
                             description = description.trim(),
                             sortOrder = sortOrder.toIntOrNull() ?: 0,
                             enabled = initial?.enabled ?: true,

@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Category::class, Dish::class, SaleRecord::class, AppMeta::class, ConnectedDevice::class],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class TpDatabase : RoomDatabase() {
@@ -34,9 +34,16 @@ abstract class TpDatabase : RoomDatabase() {
             }
         }
 
+        /** 2 → 3：菜品新增可空展示标签，旧数据迁移后保持无标签（`docs/design/0021`）。 */
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `dish` ADD COLUMN `highlight` TEXT")
+            }
+        }
+
         fun build(context: Context): TpDatabase =
             Room.databaseBuilder(context, TpDatabase::class.java, DB_NAME)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }
