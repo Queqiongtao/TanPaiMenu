@@ -1,6 +1,6 @@
 # TanPaiMenu 摆摊电子菜单 —— 开发计划
 
-> 版本：v1.9 ｜ 状态：Phase 2 已完成（M6-M9），Phase 3 进行中（M10 已完成、M11 待做）｜ 更新日期：2026-10-07
+> 版本：v1.10 ｜ 状态：Phase 2 已完成（M6-M9），Phase 3 已完成（M10、M11）｜ 更新日期：2026-10-07
 
 修订历史：
 
@@ -15,6 +15,7 @@
 | v1.7 | 2026-10-06 | M7 完成：局域网 REST / WS、Bearer 鉴权与幂等、设备注册表与库 1→2 迁移、开机自启与管理页配对信息；请求体按 UTF-8 显式解码修复中文乱码；新增 0015 设计文档。 |
 | v1.8 | 2026-10-07 | M8 完成：主机前台服务保活与启停开关、在线设备列表、WS 心跳修复；门禁补齐修改 / 关闭 / 重置管理密码；新增 0016、0017 设计文档。 |
 | v1.9 | 2026-10-07 | Phase 2 收尾（M9 随 M10 交付）；Phase 3 拆分 M10 / M11：M10 交付角色选择、一次性 6 位配对码与手机客户端只读浏览；新增 0018、0019 设计文档。 |
+| v1.10 | 2026-10-07 | M11 完成：手机端编辑（分类 / 菜品增删改、卖出 / 撤销 / 沽清、传图、恢复默认菜单）、主机「允许手机编辑」开关（`X-Device-Role` + 403）、`/state` 店名下发与撤销语义改为全局最后一条；新增 0020 设计文档。 |
 
 ## 1. 项目概述
 
@@ -146,7 +147,7 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 - 接入：首启选「手机客户端」，输入平板地址（`IP:端口` 或 `http://IP:端口`）与一次性 6 位配对码换取长期 token；不做扫码与 `NsdManager` 发现（列入后续可扩展）。
 - 同步：配对后先拉 `GET /state` 全量快照，再连 `/ws` 订阅增量；`version` 不大于本地的事件直接丢弃。
 - 连接断开：顶部显示只读条幅并保留最后一次同步的菜单，按 1/2/4/8/15 秒退避后固定 15 秒重试；配对失效（401 / WS 4401）停止重试并提示重新配对。
-- 提交命令与图片上传（乐观更新、失败回滚、手机侧压缩）：M11。
+- 编辑（M11 已实现）：菜单页「管理模式」开关；分类增删改（长按改 / 删）、菜品增删改、卖出 / 撤销 / 沽清、恢复默认菜单；图片在手机侧压缩后经 `POST /images` 上传。提交采用「提交即禁用 + 等广播对齐」，**不做乐观更新与回滚**；离线或主机 403 时给出中文提示。平板可用「允许手机编辑」开关随时收回手机写权限。
 
 ## 5. 数据模型（Room 实体）
 
@@ -262,7 +263,7 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 
 **验收**：用 `curl` 与浏览器逐条验证接口契约；token 错误返回 401；两台设备连接后均能收到广播。
 
-### Phase 3：手机客户端 —— 进行中（M10 已完成）
+### Phase 3：手机客户端 —— 已完成（M10、M11）
 
 同一个 APK 增加「手机客户端」角色：首启选角色，客户端不落库、不启前台服务，凭平板地址 + 一次性 6 位配对码接入，只读浏览菜单并实时跟随平板变更。
 
@@ -271,7 +272,7 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 | 子阶段 | 内容 | 状态 |
 | --- | --- | --- |
 | M10 | 角色选择与运行形态分流（0018）、一次性 6 位配对码与 `POST /pair`、客户端只读浏览与断线重连（0019） | 已完成 |
-| M11 | 客户端编辑：新增 / 改价 / 传图 / 卖出 / 撤销 / 沽清，乐观更新与失败回滚 | 未开始 |
+| M11 | 客户端编辑：新增 / 改价 / 传图 / 卖出 / 撤销 / 沽清、恢复默认菜单；提交即禁用 + 等广播对齐（不做乐观更新与回滚） | 已完成 |
 
 **M10 实现与验证（2026-10-07）**：
 
@@ -285,6 +286,19 @@ scripts\setup-toolchain.bat -ProxyUrl http://127.0.0.1:7890
 **文档产出**：`docs/design/0018-角色选择与客户端运行形态.md`、`docs/design/0019-手机客户端配对与只读浏览.md`；更新 `0001`（`POST /pair` 契约）、`0002`（客户端接入）、`0015`（路由与非鉴权端点）与 `docs/architecture.md`。
 
 **验收**：平板显示 6 位配对码，手机输入平板地址 + 码即看到 12 道菜；平板改价手机 1 秒内更新；手机断网出现只读条幅、恢复后自动重连；平板关闭「手机控制端」手机离线、重新打开自愈；平板在线设备列表可见该手机。
+
+**M11 实现与验证（2026-10-07）**：
+
+- 主机侧：`POST /menu/reset`（`MenuBackend.resetMenu` → `MenuRepository.resetToSeedMenu` → `FullReload` → 广播 `snapshot`）；「允许手机编辑」判定（写方法 + `X-Device-Role: client` + `SettingsStore.clientEditsEnabled` 关闭 → 403 `forbidden`，拒绝前先丢弃请求体以保护 keep-alive 连接）；`/state` 增加 `storeName` / `clientEditsEnabled`；管理页设置弹窗新增开关，`HostStatusProvider.setClientEditsEnabled` 落盘并广播快照。
+- 客户端：`client/ClientCommand`（命令 → 契约请求，带唯一 `requestId`）、`client/ClientCommandExecutor`、`ClientSession.submit/uploadImage`（提交即禁用、等广播对齐，超时拉 `/state` 兜底）、`imaging/ImageCompressor` 与 `imaging/Bitmaps`、`net/HostRestClient` 全部写方法与 `POST /images` 上传。
+- 界面：`ui/client/ClientMenuScreen`（管理模式：分类与菜品增删改、卖出 / 撤销 / 沽清、新增菜品、恢复默认菜单、失败 Snackbar）、`ui/client/ClientApp`、`ui/client/ClientSettingsDialog`；通用对话框迁到 `ui/dialogs/MenuDialogs.kt`，由 `ui/admin` 与 `ui/client` 共用。
+- 撤销语义变更：改为「全局最后一条可撤销记录」，平板与手机可互相撤销（`SaleRecordDao.getActiveFor` 去掉 deviceId 过滤）。
+- 验证：JVM 单测 139 项通过（新增 `ClientCommandTest` 9 项与 `HostApiTest` 2 项）；平板仪表测试 53 项通过（`ClientSessionTest` 跑通「改价 → 沽清 → 卖出 → 撤销 → 新增菜品 → 分类改名 / 新增 / 删除 → 上传图片 → 恢复默认菜单」、离线提交失败、开关关闭后 403；`HostServerTest` 覆盖 403 判定与 `/menu/reset` 广播）。
+- 实现中修复（仪表测试暴露）：① 图片上传原用 OkHttp 默认的 `multipart/mixed`，NanoHTTPD 只认 `multipart/form-data`，导致恒返回「缺少 file 字段」；② 403 未读取请求体，客户端复用同一条 keep-alive 连接时残留字节被解析成脏请求行（一次 403 之后该连接上的请求全部 400 语法错误）。
+
+**文档产出**：`docs/design/0020-手机客户端编辑.md`；更新 `0001`（`/menu/reset`、`forbidden`、`/state` 新字段、身份头、撤销语义）、`0002`（同步语义改为提交即禁用、编辑开关）、`0015`（角色判定与新增路由）、`0019`（店名偏差已修复）与 `docs/architecture.md`。
+
+**验收**：手机进管理模式完成日常操作（改价 / 沽清 / 卖出 / 撤销 / 增删菜 / 传图），平板 1 秒内同步；平板关闭「允许手机编辑」后手机提交被拒并提示、重开即恢复；恢复默认菜单两端一致显示 12 道菜。
 
 ### Phase 4：动画与打磨（最后做）
 
